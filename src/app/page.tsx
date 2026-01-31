@@ -52,34 +52,55 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Tagline with meaning */}
-        <div className="max-w-2xl mb-12">
-          <p className="text-lg md:text-xl text-slate-300 leading-relaxed">
-            <span className="text-amber-400 font-medium">Astrid</span> means{' '}
-            <span className="italic">divine strength</span> — and that&apos;s exactly 
-            what she brings to your day. A tireless assistant who captures your ideas, 
-            organizes your projects, and keeps you focused on what matters most.
+        {/* Hero Tagline */}
+        <div className="max-w-2xl mb-8">
+          <p className="text-lg md:text-xl text-slate-300 leading-relaxed font-medium">
+            Imagine having a brilliant assistant who never sleeps, never forgets, 
+            and always has your back. That&apos;s{' '}
+            <span className="text-amber-400">Astrid</span> — and she makes you unstoppable.
+          </p>
+        </div>
+
+        {/* Emotional Hook */}
+        <div className="max-w-2xl mb-8">
+          <p className="text-base md:text-lg text-slate-400 leading-relaxed">
+            That mental weight you carry everywhere — the follow-ups, the ideas you 
+            can&apos;t forget, the things that keep you up at night? Offload them to Astrid. 
+            She captures, organizes, and acts, so you can focus on what only{' '}
+            <span className="italic">you</span> can do.
+          </p>
+          <p className="mt-4 text-amber-400 font-semibold">
+            That&apos;s not just productivity. That&apos;s superhuman.
           </p>
         </div>
 
         {/* Value Props */}
-        <div className="flex flex-wrap justify-center gap-6 mb-12 text-sm md:text-base text-slate-400">
+        <div className="flex flex-wrap justify-center gap-6 mb-8 text-sm md:text-base text-slate-400">
           <div className="flex items-center gap-2">
             <span className="text-green-400">✓</span>
-            <span>Chat via Telegram</span>
+            <span>Chat naturally via Telegram</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-green-400">✓</span>
-            <span>Capture ideas via email</span>
+            <span>Capture ideas by email</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-green-400">✓</span>
-            <span>Second brain system</span>
+            <span>Offload tasks, never drop the ball</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-green-400">✓</span>
             <span>Works while you sleep</span>
           </div>
+        </div>
+
+        {/* Brilliance Closer */}
+        <div className="max-w-xl mb-12">
+          <p className="text-sm md:text-base text-slate-500 leading-relaxed">
+            Astrid doesn&apos;t just keep you organized. She adds a layer of brilliance 
+            to everything you do — thinking ahead, connecting dots, and making sure 
+            nothing slips through the cracks.
+          </p>
         </div>
 
         {/* Email Signup */}
