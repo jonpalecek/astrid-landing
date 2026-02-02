@@ -1,44 +1,23 @@
 'use client';
 
-import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import Link from 'next/link';
 
 export default function Home() {
-  const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [errorMessage, setErrorMessage] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatus('loading');
-    setErrorMessage('');
-    
-    try {
-      const { error } = await supabase
-        .from('waitlist')
-        .insert([{ email, source: 'landing' }]);
-
-      if (error) {
-        if (error.code === '23505') {
-          // Unique constraint violation - email already exists
-          setErrorMessage('You\'re already on the list! We\'ll be in touch soon.');
-          setStatus('success');
-        } else {
-          throw error;
-        }
-      } else {
-        setStatus('success');
-      }
-      setEmail('');
-    } catch (err) {
-      console.error('Error joining waitlist:', err);
-      setStatus('error');
-      setErrorMessage('Something went wrong. Please try again.');
-    }
-  };
-
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white">
+      {/* Header */}
+      <header className="absolute top-0 w-full py-6 px-4">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Astrid</h1>
+          <Link 
+            href="/login"
+            className="px-4 py-2 text-slate-300 hover:text-white transition-colors"
+          >
+            Sign in
+          </Link>
+        </div>
+      </header>
+
       {/* Hero Section */}
       <div className="flex flex-col items-center justify-center min-h-screen px-4 text-center">
         
@@ -82,11 +61,11 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-green-400">✓</span>
-            <span>Capture ideas by email</span>
+            <span>Manage projects &amp; tasks</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-green-400">✓</span>
-            <span>Offload tasks, never drop the ball</span>
+            <span>Capture ideas on the go</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-green-400">✓</span>
@@ -103,60 +82,84 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Email Signup */}
-        <div className="w-full max-w-md">
-          {status === 'success' ? (
-            <div className="bg-green-900/50 border border-green-500/50 rounded-lg p-6">
-              <p className="text-green-400 font-medium">
-                🎉 You&apos;re on the list!
-              </p>
-              <p className="text-slate-400 text-sm mt-2">
-                {errorMessage || "We'll notify you when Astrid is ready."}
-              </p>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  className="flex-1 px-4 py-3 rounded-lg bg-slate-800 border border-slate-700 
-                           text-white placeholder-slate-500 focus:outline-none focus:border-amber-500
-                           transition-colors"
-                />
-                <button
-                  type="submit"
-                  disabled={status === 'loading'}
-                  className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold 
-                           rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed
-                           whitespace-nowrap"
-                >
-                  {status === 'loading' ? 'Joining...' : 'Get Early Access'}
-                </button>
-              </div>
-              {status === 'error' && (
-                <p className="text-red-400 text-sm">{errorMessage}</p>
-              )}
-              <p className="text-slate-500 text-sm">
-                Be the first to know when Astrid launches. No spam, ever.
-              </p>
-            </form>
-          )}
+        {/* CTA Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Link
+            href="/login"
+            className="px-8 py-4 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold 
+                     rounded-lg transition-colors text-lg"
+          >
+            Get Started — Free Trial
+          </Link>
+          <Link
+            href="#pricing"
+            className="px-8 py-4 bg-slate-700 hover:bg-slate-600 text-white font-semibold 
+                     rounded-lg transition-colors text-lg"
+          >
+            View Pricing
+          </Link>
         </div>
 
-        {/* Coming Soon Badge */}
-        <div className="mt-16">
-          <span className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-full text-sm text-slate-400">
-            Coming Soon — 2026
-          </span>
-        </div>
+        {/* Trial Info */}
+        <p className="mt-4 text-slate-500 text-sm">
+          7-day free trial • $99/month after • Cancel anytime
+        </p>
       </div>
 
+      {/* Pricing Section */}
+      <section id="pricing" className="py-24 px-4">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
+          <p className="text-slate-400 mb-12">One plan. Everything included. No surprises.</p>
+          
+          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8 max-w-md mx-auto">
+            <div className="text-amber-400 text-sm font-medium mb-2">PERSONAL ASSISTANT</div>
+            <div className="flex items-baseline justify-center gap-2 mb-6">
+              <span className="text-5xl font-bold">$99</span>
+              <span className="text-slate-400">/month</span>
+            </div>
+            
+            <ul className="text-left space-y-3 mb-8">
+              <li className="flex items-center gap-3">
+                <span className="text-green-400">✓</span>
+                <span className="text-slate-300">Your own AI assistant (powered by Claude)</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="text-green-400">✓</span>
+                <span className="text-slate-300">Unlimited conversations via Telegram</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="text-green-400">✓</span>
+                <span className="text-slate-300">Project &amp; task management</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="text-green-400">✓</span>
+                <span className="text-slate-300">Idea capture &amp; inbox</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="text-green-400">✓</span>
+                <span className="text-slate-300">Web dashboard</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="text-green-400">✓</span>
+                <span className="text-slate-300">Works 24/7, never forgets</span>
+              </li>
+            </ul>
+
+            <Link
+              href="/login"
+              className="block w-full px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 
+                       font-semibold rounded-lg transition-colors text-center"
+            >
+              Start 7-Day Free Trial
+            </Link>
+            <p className="mt-3 text-slate-500 text-sm">No credit card required to start</p>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
-      <footer className="absolute bottom-0 w-full py-6 text-center text-slate-500 text-sm">
+      <footer className="py-8 text-center text-slate-500 text-sm border-t border-slate-800">
         <p>© 2026 Astrid. Divine strength for busy minds.</p>
       </footer>
     </main>
