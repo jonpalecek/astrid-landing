@@ -1,6 +1,4 @@
 import { createClient } from '@/lib/supabase-server';
-import { OpenClawSSHClient } from '@/lib/openclaw-client';
-import { parseTasks, parseProjects } from '@/lib/workspace-parsers';
 import { 
   CheckCircle2, 
   Circle,
@@ -11,6 +9,21 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
+interface Task {
+  id: string;
+  title: string;
+  status: string;
+  due?: string;
+  priority?: string;
+  project?: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  tasks: Task[];
+}
+
 export default async function TasksPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -18,37 +31,35 @@ export default async function TasksPage() {
   // Get user's instance
   const { data: instance } = await supabase
     .from('instances')
-    .select('droplet_ip, status')
+    .select('id, status')
     .eq('user_id', user?.id)
     .single();
 
-  let standaloneTasks: ReturnType<typeof parseTasks> = [];
-  let projectTasks: ReturnType<typeof parseTasks> = [];
+  let standaloneTasks: Task[] = [];
+  let projectTasks: (Task & { projectName?: string })[] = [];
   let error: string | null = null;
+  let lastSynced: string | null = null;
 
-  if (instance?.status === 'active' && instance?.droplet_ip) {
-    try {
-      const client = new OpenClawSSHClient(instance.droplet_ip);
+  if (instance?.status === 'active' && instance?.id) {
+    const { data: workspaceData, error: wsError } = await supabase
+      .from('workspace_data')
+      .select('tasks, projects, synced_at')
+      .eq('instance_id', instance.id)
+      .single();
+
+    if (wsError && wsError.code !== 'PGRST116') {
+      error = 'Unable to load tasks';
+    } else if (workspaceData) {
+      standaloneTasks = workspaceData.tasks || [];
+      lastSynced = workspaceData.synced_at;
       
-      // Fetch both tasks and projects
-      const [tasksContent, projectsContent] = await Promise.all([
-        client.readFile('TASKS.md'),
-        client.readFile('PROJECTS.md'),
-      ]);
-      
-      if (tasksContent) {
-        standaloneTasks = parseTasks(tasksContent);
-      }
-      
-      if (projectsContent) {
-        const projects = parseProjects(projectsContent);
-        projectTasks = projects.flatMap(p => 
-          p.tasks.map(t => ({ ...t, projectName: p.name }))
-        );
-      }
-    } catch (e) {
-      console.error('Failed to fetch tasks:', e);
-      error = 'Unable to load tasks from your assistant';
+      // Extract tasks from projects
+      const projects: Project[] = workspaceData.projects || [];
+      projectTasks = projects.flatMap(p => 
+        p.tasks.map(t => ({ ...t, projectName: p.name }))
+      );
+    } else {
+      error = 'Waiting for assistant to sync...';
     }
   }
 
@@ -62,9 +73,16 @@ export default async function TasksPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Tasks</h1>
-        <p className="text-slate-500">All your tasks in one place</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Tasks</h1>
+          <p className="text-slate-500">All your tasks in one place</p>
+        </div>
+        {lastSynced && (
+          <p className="text-xs text-slate-400">
+            Synced {new Date(lastSynced).toLocaleString()}
+          </p>
+        )}
       </div>
 
       {/* Stats */}
@@ -86,7 +104,7 @@ export default async function TasksPage() {
       )}
 
       {/* No Instance State */}
-      {!instance?.droplet_ip && (
+      {!instance?.id && (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
           <CheckCircle2 className="w-12 h-12 mx-auto mb-4 text-slate-300" />
           <h2 className="text-xl font-semibold text-slate-900 mb-2">No assistant connected</h2>
@@ -103,7 +121,7 @@ export default async function TasksPage() {
       )}
 
       {/* Empty State */}
-      {instance?.droplet_ip && allTasks.length === 0 && !error && (
+      {instance?.id && allTasks.length === 0 && !error && (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
           <Sparkles className="w-12 h-12 mx-auto mb-4 text-slate-300" />
           <h2 className="text-xl font-semibold text-slate-900 mb-2">No tasks yet</h2>
@@ -146,7 +164,6 @@ export default async function TasksPage() {
           title="Completed" 
           icon={<Check className="w-4 h-4 text-green-500" />}
           tasks={doneTasks} 
-          collapsed
         />
       )}
     </div>
@@ -175,12 +192,10 @@ function TaskSection({
   title, 
   icon,
   tasks,
-  collapsed = false
 }: { 
   title: string;
   icon: React.ReactNode;
-  tasks: Array<ReturnType<typeof parseTasks>[0] & { projectName?: string }>;
-  collapsed?: boolean;
+  tasks: Array<Task & { projectName?: string }>;
 }) {
   return (
     <div>
