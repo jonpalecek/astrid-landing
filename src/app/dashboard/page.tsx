@@ -1,51 +1,16 @@
 import { createClient } from '@/lib/supabase-server';
-import { callAdminAPI, AdminAPIError } from '@/lib/admin-api';
 import { getTunnelStatus } from '@/lib/cloudflare';
 import Link from 'next/link';
 import { 
-  Inbox, 
-  Rocket, 
-  CheckCircle2, 
-  Lightbulb, 
   Sparkles, 
-  Target,
   ArrowRight,
-  Plus,
-  Circle,
-  Check,
   Wifi,
   WifiOff,
   Settings,
-  AlertCircle,
-  RefreshCw
+  Circle,
+  Check,
 } from 'lucide-react';
-
-interface Task {
-  id: string;
-  title: string;
-  done: boolean;
-  status?: string;
-  due?: string | null;
-  priority?: string;
-}
-
-interface Project {
-  id: string;
-  name: string;
-  status: string;
-  tasks: Task[];
-}
-
-interface InboxItem {
-  id: string;
-  content: string;
-}
-
-interface Idea {
-  id: string;
-  content: string;
-  title?: string;
-}
+import { DashboardContent } from './dashboard-content';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -84,69 +49,6 @@ export default async function DashboardPage() {
 
   const isActive = instance?.status === 'active';
   const isProvisioning = instance?.status === 'provisioning' || instance?.status === 'configuring';
-  
-  // Fetch workspace data from Admin Agent (live from VM)
-  let workspaceStats = {
-    inboxCount: 0,
-    activeProjectsCount: 0,
-    tasksDoneThisWeek: 0,
-    ideasCount: 0,
-    activeProjects: [] as Project[],
-    recentTasks: [] as Task[],
-    recentInbox: [] as InboxItem[],
-    recentIdeas: [] as Idea[],
-  };
-  let workspaceError: string | null = null;
-
-  if (isActive) {
-    try {
-      // Fetch tasks first to surface any auth errors
-      const tasksRes = await callAdminAPI<{ tasks: Task[] }>('/tasks');
-      
-      // Fetch remaining data in parallel (fail silently for these)
-      const [projectsRes, inboxRes, ideasRes] = await Promise.all([
-        callAdminAPI<{ projects: Project[] }>('/projects').catch(() => ({ projects: [] })),
-        callAdminAPI<{ items: InboxItem[] }>('/inbox').catch(() => ({ items: [] })),
-        callAdminAPI<{ ideas: Idea[] }>('/ideas').catch(() => ({ ideas: [] })),
-      ]);
-
-      const tasks = tasksRes.tasks || [];
-      const projects = projectsRes.projects || [];
-      const inbox = inboxRes.items || [];
-      const ideas = ideasRes.ideas || [];
-
-      // Debug: log what we got
-      console.log('[Dashboard] Data received:', {
-        tasks: tasks.length,
-        projects: projects.length,
-        inbox: inbox.length,
-        ideas: ideas.length,
-      });
-
-      // Calculate stats
-      const doneTasks = tasks.filter(t => t.done);
-      const activeProjects = projects.filter(p => p.status === 'active' || !p.status);
-      const upcomingTasks = tasks.filter(t => !t.done).slice(0, 5);
-
-      workspaceStats = {
-        inboxCount: inbox.length,
-        activeProjectsCount: activeProjects.length,
-        tasksDoneThisWeek: doneTasks.length,
-        ideasCount: ideas.length,
-        activeProjects: activeProjects.slice(0, 5),
-        recentTasks: upcomingTasks,
-        recentInbox: inbox.slice(0, 5),
-        recentIdeas: ideas.slice(0, 5),
-      };
-    } catch (e) {
-      console.error('[Dashboard] Main error:', e);
-      if (e instanceof AdminAPIError) {
-        workspaceError = `[${e.code}] ${e.message}`;
-      } else {
-        workspaceError = `Error: ${e instanceof Error ? e.message : 'Unknown'}`;
-      }
-    }
-  }
 
   // Get current hour for greeting
   const hour = new Date().getHours();
@@ -175,22 +77,10 @@ export default async function DashboardPage() {
           </h2>
           <p className="text-slate-600 mb-4">Complete these steps to set up your AI assistant:</p>
           <div className="space-y-3">
-            <GettingStartedItem 
-              done={true} 
-              label="Create your account" 
-            />
-            <GettingStartedItem 
-              done={!!instance} 
-              label="Connect your AI (Claude API key or subscription)" 
-            />
-            <GettingStartedItem 
-              done={!!instance} 
-              label="Connect Telegram" 
-            />
-            <GettingStartedItem 
-              done={false} 
-              label="Personalize your assistant" 
-            />
+            <GettingStartedItem done={true} label="Create your account" />
+            <GettingStartedItem done={!!instance} label="Connect your AI (Claude API key or subscription)" />
+            <GettingStartedItem done={!!instance} label="Connect Telegram" />
+            <GettingStartedItem done={false} label="Personalize your assistant" />
           </div>
           <a 
             href="/dashboard/onboarding" 
@@ -268,202 +158,10 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Quick Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          icon={<Inbox className="w-6 h-6 text-blue-500" />}
-          label="Inbox" 
-          value={workspaceStats.inboxCount.toString()} 
-          sublabel={workspaceStats.inboxCount === 1 ? "item to process" : "items to process"}
-          href="/dashboard/inbox"
-        />
-        <StatCard 
-          icon={<Rocket className="w-6 h-6 text-purple-500" />}
-          label="Active Projects" 
-          value={workspaceStats.activeProjectsCount.toString()} 
-          sublabel="in progress"
-          href="/dashboard/projects"
-        />
-        <StatCard 
-          icon={<CheckCircle2 className="w-6 h-6 text-green-500" />}
-          label="Tasks Done" 
-          value={workspaceStats.tasksDoneThisWeek.toString()} 
-          sublabel="this week"
-        />
-        <StatCard 
-          icon={<Lightbulb className="w-6 h-6 text-amber-500" />}
-          label="Ideas" 
-          value={workspaceStats.ideasCount.toString()} 
-          sublabel="in backlog"
-          href="/dashboard/ideas"
-        />
-      </div>
-
-      {/* Workspace Error Banner */}
-      {workspaceError && isActive && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
-          <p className="text-sm text-amber-700">{workspaceError}</p>
-        </div>
-      )}
-
-      {/* Live Data Indicator */}
-      {isActive && !workspaceError && (
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <RefreshCw className="w-3 h-3" />
-          Live from assistant
-        </div>
-      )}
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Inbox Preview */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-              <Inbox className="w-5 h-5 text-blue-500" />
-              Inbox
-            </h2>
-            <a href="/dashboard/inbox" className="text-sm text-amber-600 hover:text-amber-700 flex items-center gap-1">
-              View all <ArrowRight className="w-3 h-3" />
-            </a>
-          </div>
-          {workspaceStats.recentInbox.length > 0 ? (
-            <ul className="space-y-2">
-              {workspaceStats.recentInbox.map((item) => (
-                <li key={item.id} className="flex items-start gap-2 text-sm">
-                  <Circle className="w-2 h-2 text-blue-400 mt-1.5 shrink-0" />
-                  <span className="text-slate-700 line-clamp-1">{item.content}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="text-center py-8 text-slate-400">
-              <Sparkles className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-              <p>Inbox zero! Nothing to process.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Active Projects */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-              <Rocket className="w-5 h-5 text-purple-500" />
-              Active Projects
-            </h2>
-            <a href="/dashboard/projects" className="text-sm text-amber-600 hover:text-amber-700 flex items-center gap-1">
-              View all <ArrowRight className="w-3 h-3" />
-            </a>
-          </div>
-          {workspaceStats.activeProjects.length > 0 ? (
-            <ul className="space-y-3">
-              {workspaceStats.activeProjects.map((project) => (
-                <li key={project.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-purple-400" />
-                    <span className="text-sm font-medium text-slate-700">{project.name}</span>
-                  </div>
-                  <span className="text-xs text-slate-400">
-                    {project.tasks?.filter(t => !t.done).length || 0} tasks
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="text-center py-8 text-slate-400">
-              <Target className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-              <p>No projects yet. Create your first one!</p>
-              <a 
-                href="/dashboard/projects/new" 
-                className="inline-flex items-center gap-1 mt-4 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
-              >
-                <Plus className="w-4 h-4" /> New Project
-              </a>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Upcoming Tasks */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5 text-green-500" />
-          Upcoming Tasks
-        </h2>
-        {workspaceStats.recentTasks.length > 0 ? (
-          <ul className="space-y-2">
-            {workspaceStats.recentTasks.map((task) => (
-              <li key={task.id} className="flex items-center gap-3 text-sm">
-                <span className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
-                  task.done 
-                    ? 'bg-green-100 border-green-300 text-green-600' 
-                    : task.status === 'in-progress'
-                    ? 'bg-blue-100 border-blue-300'
-                    : 'border-slate-300'
-                }`}>
-                  {task.done && <Check className="w-3 h-3" />}
-                </span>
-                <span className={`flex-1 ${task.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
-                  {task.title}
-                </span>
-                {task.due && (
-                  <span className="text-xs text-slate-400">{task.due}</span>
-                )}
-                {task.priority && task.priority !== 'normal' && task.priority !== 'medium' && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${
-                    task.priority === 'urgent' ? 'bg-red-100 text-red-700' :
-                    task.priority === 'high' ? 'bg-orange-100 text-orange-700' :
-                    'bg-slate-100 text-slate-600'
-                  }`}>
-                    {task.priority}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="text-center py-8 text-slate-400">
-            <Sparkles className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-            <p>No tasks yet. Ask your assistant to help you get organized!</p>
-          </div>
-        )}
-      </div>
-
+      {/* Dashboard Content - Client component with SWR */}
+      <DashboardContent isActive={isActive} />
     </div>
   );
-}
-
-function StatCard({ 
-  icon, 
-  label, 
-  value, 
-  sublabel, 
-  href 
-}: { 
-  icon: React.ReactNode; 
-  label: string; 
-  value: string; 
-  sublabel: string;
-  href?: string;
-}) {
-  const content = (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-300 hover:shadow-sm transition-all">
-      <div className="flex items-center gap-3">
-        {icon}
-        <div>
-          <p className="text-sm text-slate-500">{label}</p>
-          <p className="text-2xl font-bold text-slate-900">{value}</p>
-          <p className="text-xs text-slate-400">{sublabel}</p>
-        </div>
-      </div>
-    </div>
-  );
-
-  if (href) {
-    return <a href={href}>{content}</a>;
-  }
-  return content;
 }
 
 function GettingStartedItem({ done, label }: { done: boolean; label: string }) {

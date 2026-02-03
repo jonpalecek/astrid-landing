@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useProjects, Project } from '@/hooks/use-workspace';
 import { 
   Rocket, 
   Target, 
@@ -8,79 +8,51 @@ import {
   Clock,
   AlertCircle,
   Pause,
-  Loader2
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 
-interface ProjectTask {
-  id: string;
-  title: string;
-  done: boolean;
-  due?: string;
-  priority?: string;
-}
-
-interface Project {
-  id: string;
-  name: string;
-  status: string;
-  description?: string;
-  tasks: ProjectTask[];
-}
-
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function fetchProjects() {
-      try {
-        const res = await fetch('/api/vm/projects');
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || 'Failed to load projects');
-        }
-        const data = await res.json();
-        setProjects(data.projects || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load projects');
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchProjects();
-  }, []);
+  const { projects, isLoading, isError, error, refresh } = useProjects();
 
   const activeProjects = projects.filter(p => p.status === 'active');
   const onHoldProjects = projects.filter(p => p.status === 'on-hold');
   const completedProjects = projects.filter(p => p.status === 'completed');
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Projects</h1>
-        <p className="text-slate-500">Manage your active work</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Projects</h1>
+          <p className="text-slate-500">Manage your active work</p>
+        </div>
+        <button
+          onClick={() => refresh()}
+          className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+          title="Refresh"
+        >
+          <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* Error State */}
-      {error && (
+      {isError && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
           <p className="text-sm text-amber-700">{error}</p>
         </div>
       )}
 
+      {/* Loading State - only show if no cached data */}
+      {isLoading && projects.length === 0 && (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+        </div>
+      )}
+
       {/* Empty State */}
-      {!error && projects.length === 0 && (
+      {!isLoading && !isError && projects.length === 0 && (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
           <Target className="w-12 h-12 mx-auto mb-4 text-slate-300" />
           <h2 className="text-xl font-semibold text-slate-900 mb-2">No projects yet</h2>
