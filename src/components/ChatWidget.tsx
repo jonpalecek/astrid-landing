@@ -176,17 +176,25 @@ export default function ChatWidget({
     // Handle chat event responses (type: "event", event: "chat")
     if (data.type === 'event' && data.event === 'chat') {
       const payload = data.payload || {};
-      const content = payload.chunk || payload.content || payload.text || '';
-      const isDone = payload.done || payload.finished;
+      // Extract text from message.content array
+      const messageContent = payload.message?.content;
+      let content = '';
+      if (Array.isArray(messageContent)) {
+        content = messageContent
+          .filter((c: any) => c.type === 'text')
+          .map((c: any) => c.text)
+          .join('');
+      }
+      const isDone = payload.state === 'final';
       
       if (content) {
         setMessages(prev => {
           const lastMsg = prev[prev.length - 1];
           if (lastMsg?.streaming && lastMsg.role === 'assistant') {
-            // Append to existing streaming message
+            // Replace with full cumulative content (delta messages are cumulative)
             return prev.map((msg, i) => 
               i === prev.length - 1 
-                ? { ...msg, content: msg.content + content }
+                ? { ...msg, content: content }
                 : msg
             );
           } else {
