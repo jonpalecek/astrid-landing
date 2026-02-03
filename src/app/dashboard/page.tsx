@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase-server';
+import { callAdminAPI, AdminAPIError } from '@/lib/admin-api';
 import { getTunnelStatus } from '@/lib/cloudflare';
 import Link from 'next/link';
 import { 
@@ -8,7 +9,6 @@ import {
   Lightbulb, 
   Sparkles, 
   Target,
-  MessageSquare,
   ArrowRight,
   Plus,
   Circle,
@@ -16,8 +16,36 @@ import {
   Wifi,
   WifiOff,
   Settings,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
+
+interface Task {
+  id: string;
+  title: string;
+  done: boolean;
+  status?: string;
+  due?: string | null;
+  priority?: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  status: string;
+  tasks: Task[];
+}
+
+interface InboxItem {
+  id: string;
+  content: string;
+}
+
+interface Idea {
+  id: string;
+  content: string;
+  title?: string;
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -57,52 +85,57 @@ export default async function DashboardPage() {
   const isActive = instance?.status === 'active';
   const isProvisioning = instance?.status === 'provisioning' || instance?.status === 'configuring';
   
-  // Fetch workspace data from Supabase (synced by assistant)
+  // Fetch workspace data from Admin Agent (live from VM)
   let workspaceStats = {
     inboxCount: 0,
     activeProjectsCount: 0,
     tasksDoneThisWeek: 0,
     ideasCount: 0,
-    activeProjects: [] as Array<{ id: string; name: string; status: string; tasks: Array<{ status: string }> }>,
-    recentTasks: [] as Array<{ id: string; title: string; status: string; due?: string; priority?: string }>,
-    recentInbox: [] as Array<{ id: string; content: string }>,
-    recentIdeas: [] as Array<{ id: string; content: string }>,
+    activeProjects: [] as Project[],
+    recentTasks: [] as Task[],
+    recentInbox: [] as InboxItem[],
+    recentIdeas: [] as Idea[],
   };
   let workspaceError: string | null = null;
-  let lastSyncedAt: string | null = null;
 
-  if (isActive && instance?.id) {
-    const { data: workspaceData, error: wsError } = await supabase
-      .from('workspace_data')
-      .select('*')
-      .eq('instance_id', instance.id)
-      .single();
+  if (isActive) {
+    try {
+      // Fetch all workspace data in parallel from Admin Agent
+      const [tasksRes, projectsRes, inboxRes, ideasRes] = await Promise.all([
+        callAdminAPI<{ tasks: Task[] }>('/tasks').catch(() => ({ tasks: [] })),
+        callAdminAPI<{ projects: Project[] }>('/projects').catch(() => ({ projects: [] })),
+        callAdminAPI<{ items: InboxItem[] }>('/inbox').catch(() => ({ items: [] })),
+        callAdminAPI<{ ideas: Idea[] }>('/ideas').catch(() => ({ ideas: [] })),
+      ]);
 
-    if (wsError && wsError.code !== 'PGRST116') {
-      // PGRST116 = no rows, which is fine for new instances
-      console.error('Failed to fetch workspace data:', wsError);
-      workspaceError = 'Unable to load workspace data';
-    } else if (workspaceData) {
-      lastSyncedAt = workspaceData.synced_at;
-      const stats = workspaceData.stats || {};
-      const projects = workspaceData.projects || [];
-      const tasks = workspaceData.tasks || [];
-      const inbox = workspaceData.inbox || [];
-      const ideas = workspaceData.ideas || [];
+      const tasks = tasksRes.tasks || [];
+      const projects = projectsRes.projects || [];
+      const inbox = inboxRes.items || [];
+      const ideas = ideasRes.ideas || [];
+
+      // Calculate stats
+      const doneTasks = tasks.filter(t => t.done);
+      const activeProjects = projects.filter(p => p.status === 'active' || !p.status);
+      const upcomingTasks = tasks.filter(t => !t.done).slice(0, 5);
 
       workspaceStats = {
-        inboxCount: stats.inboxCount ?? inbox.length,
-        activeProjectsCount: stats.activeProjectsCount ?? projects.filter((p: any) => p.status === 'active').length,
-        tasksDoneThisWeek: stats.tasksDoneThisWeek ?? 0,
-        ideasCount: stats.ideasCount ?? ideas.length,
-        activeProjects: projects.filter((p: any) => p.status === 'active').slice(0, 5),
-        recentTasks: tasks.filter((t: any) => t.status !== 'done').slice(0, 5),
+        inboxCount: inbox.length,
+        activeProjectsCount: activeProjects.length,
+        tasksDoneThisWeek: doneTasks.length,
+        ideasCount: ideas.length,
+        activeProjects: activeProjects.slice(0, 5),
+        recentTasks: upcomingTasks,
         recentInbox: inbox.slice(0, 5),
         recentIdeas: ideas.slice(0, 5),
       };
-    } else {
-      // No workspace data yet - assistant hasn't synced
-      workspaceError = 'Waiting for assistant to sync workspace data...';
+    } catch (e) {
+      if (e instanceof AdminAPIError) {
+        workspaceError = e.code === 'CONNECTION_ERROR' 
+          ? 'Unable to reach your assistant. Is it running?'
+          : e.message;
+      } else {
+        workspaceError = 'Unable to load workspace data';
+      }
     }
   }
 
@@ -125,7 +158,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Getting Started - Show prominently if no active instance */}
-      {!isActive && (
+      {!isActive && !isProvisioning && (
         <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-6">
           <h2 className="text-lg font-semibold text-slate-900 mb-2 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-amber-500" />
@@ -265,6 +298,14 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {/* Live Data Indicator */}
+      {isActive && !workspaceError && (
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <RefreshCw className="w-3 h-3" />
+          Live from assistant
+        </div>
+      )}
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Inbox Preview */}
@@ -315,7 +356,7 @@ export default async function DashboardPage() {
                     <span className="text-sm font-medium text-slate-700">{project.name}</span>
                   </div>
                   <span className="text-xs text-slate-400">
-                    {project.tasks.filter(t => t.status !== 'done').length} tasks
+                    {project.tasks?.filter(t => !t.done).length || 0} tasks
                   </span>
                 </li>
               ))}
@@ -346,21 +387,21 @@ export default async function DashboardPage() {
             {workspaceStats.recentTasks.map((task) => (
               <li key={task.id} className="flex items-center gap-3 text-sm">
                 <span className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
-                  task.status === 'done' 
+                  task.done 
                     ? 'bg-green-100 border-green-300 text-green-600' 
                     : task.status === 'in-progress'
                     ? 'bg-blue-100 border-blue-300'
                     : 'border-slate-300'
                 }`}>
-                  {task.status === 'done' && <Check className="w-3 h-3" />}
+                  {task.done && <Check className="w-3 h-3" />}
                 </span>
-                <span className={`flex-1 ${task.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                <span className={`flex-1 ${task.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
                   {task.title}
                 </span>
                 {task.due && (
                   <span className="text-xs text-slate-400">{task.due}</span>
                 )}
-                {task.priority && task.priority !== 'medium' && (
+                {task.priority && task.priority !== 'normal' && task.priority !== 'medium' && (
                   <span className={`text-xs px-1.5 py-0.5 rounded ${
                     task.priority === 'urgent' ? 'bg-red-100 text-red-700' :
                     task.priority === 'high' ? 'bg-orange-100 text-orange-700' :

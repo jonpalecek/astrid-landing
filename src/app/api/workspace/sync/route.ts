@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Use service role for server-side writes
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Lazy-load supabase client to avoid build-time errors
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 export interface WorkspaceSyncPayload {
   instance_token: string;  // Gateway token for auth
@@ -51,8 +53,10 @@ export interface WorkspaceSyncPayload {
 }
 
 // POST /api/workspace/sync - Receive workspace data from assistant
+// NOTE: This endpoint is deprecated. Dashboard now reads directly from Admin Agent.
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabaseAdmin();
     const payload: WorkspaceSyncPayload = await request.json();
 
     // Validate required fields
@@ -107,7 +111,9 @@ export async function POST(request: NextRequest) {
 }
 
 // GET /api/workspace/sync - Get last sync status (for debugging)
+// NOTE: This endpoint is deprecated. Dashboard now reads directly from Admin Agent.
 export async function GET(request: NextRequest) {
+  const supabase = getSupabaseAdmin();
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   
   if (!token) {
