@@ -78,14 +78,8 @@ export default function ChatWidget({
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
-        // Send auth
-        ws.send(JSON.stringify({
-          type: 'connect',
-          params: {
-            auth: { token: gatewayToken }
-          }
-        }));
+        console.log('WebSocket connected, waiting for challenge...');
+        // Don't send auth yet - wait for connect.challenge event
       };
 
       ws.onmessage = (event) => {
@@ -123,8 +117,40 @@ export default function ChatWidget({
   }, [tunnelUrl, gatewayToken, isOpen]);
 
   const handleWebSocketMessage = (data: any) => {
-    // Handle connection acknowledgment
-    if (data.type === 'connected' || data.type === 'connect.ack') {
+    console.log('WS message:', data);
+    
+    // Handle connect.challenge - respond with auth
+    if (data.type === 'event' && data.event === 'connect.challenge') {
+      console.log('Received challenge, sending connect request...');
+      wsRef.current?.send(JSON.stringify({
+        type: 'req',
+        id: `connect-${Date.now()}`,
+        method: 'connect',
+        params: {
+          minProtocol: 3,
+          maxProtocol: 3,
+          client: {
+            id: 'astrid-web',
+            version: '1.0.0',
+            platform: 'web',
+            mode: 'operator'
+          },
+          role: 'operator',
+          scopes: ['operator.read', 'operator.write'],
+          caps: [],
+          commands: [],
+          permissions: {},
+          auth: { token: gatewayToken },
+          locale: navigator.language || 'en-US',
+          userAgent: navigator.userAgent
+        }
+      }));
+      return;
+    }
+
+    // Handle connection acknowledgment (response to connect request)
+    if (data.type === 'res' && data.ok && data.payload?.type === 'hello-ok') {
+      console.log('Connect succeeded:', data.payload);
       setIsConnected(true);
       setIsConnecting(false);
       
@@ -137,6 +163,13 @@ export default function ChatWidget({
           timestamp: new Date(),
         }]);
       }
+      return;
+    }
+
+    // Handle connect failure
+    if (data.type === 'res' && !data.ok) {
+      console.error('Connect failed:', data.error);
+      setIsConnecting(false);
       return;
     }
 
@@ -239,8 +272,9 @@ export default function ChatWidget({
       // Send via WebSocket
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
-          type: 'chat.send',
+          type: 'req',
           id: `chat-${Date.now()}`,
+          method: 'chat.send',
           params: {
             message: messageText,
             sessionKey: 'dashboard-chat',
