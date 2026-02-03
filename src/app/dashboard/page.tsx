@@ -1,13 +1,5 @@
 import { createClient } from '@/lib/supabase-server';
 import { getTunnelStatus } from '@/lib/cloudflare';
-import { OpenClawSSHClient } from '@/lib/openclaw-client';
-import { 
-  parseProjects, 
-  parseTasks, 
-  parseIdeas, 
-  parseInbox,
-  getWorkspaceStats,
-} from '@/lib/workspace-parsers';
 import Link from 'next/link';
 import { 
   Inbox, 
@@ -65,42 +57,52 @@ export default async function DashboardPage() {
   const isActive = instance?.status === 'active';
   const isProvisioning = instance?.status === 'provisioning' || instance?.status === 'configuring';
   
-  // Fetch workspace data if instance is active
+  // Fetch workspace data from Supabase (synced by assistant)
   let workspaceStats = {
     inboxCount: 0,
     activeProjectsCount: 0,
     tasksDoneThisWeek: 0,
     ideasCount: 0,
-    activeProjects: [] as ReturnType<typeof getWorkspaceStats>['activeProjects'],
-    recentTasks: [] as ReturnType<typeof getWorkspaceStats>['recentTasks'],
-    recentInbox: [] as ReturnType<typeof getWorkspaceStats>['recentInbox'],
-    recentIdeas: [] as ReturnType<typeof getWorkspaceStats>['recentIdeas'],
+    activeProjects: [] as Array<{ id: string; name: string; status: string; tasks: Array<{ status: string }> }>,
+    recentTasks: [] as Array<{ id: string; title: string; status: string; due?: string; priority?: string }>,
+    recentInbox: [] as Array<{ id: string; content: string }>,
+    recentIdeas: [] as Array<{ id: string; content: string }>,
   };
   let workspaceError: string | null = null;
+  let lastSyncedAt: string | null = null;
 
-  if (isActive && instance?.droplet_ip) {
-    try {
-      const client = new OpenClawSSHClient(instance.droplet_ip);
-      
-      // Fetch workspace files in parallel
-      const [projectsContent, tasksContent, ideasContent, inboxContent] = await Promise.all([
-        client.readFile('PROJECTS.md'),
-        client.readFile('TASKS.md'),
-        client.readFile('IDEAS.md'),
-        client.readFile('INBOX.md'),
-      ]);
+  if (isActive && instance?.id) {
+    const { data: workspaceData, error: wsError } = await supabase
+      .from('workspace_data')
+      .select('*')
+      .eq('instance_id', instance.id)
+      .single();
 
-      // Parse each file
-      const projects = projectsContent ? parseProjects(projectsContent) : [];
-      const tasks = tasksContent ? parseTasks(tasksContent) : [];
-      const ideas = ideasContent ? parseIdeas(ideasContent) : [];
-      const inbox = inboxContent ? parseInbox(inboxContent) : [];
-
-      // Calculate stats
-      workspaceStats = getWorkspaceStats(projects, tasks, ideas, inbox);
-    } catch (e) {
-      console.error('Failed to fetch workspace data:', e);
+    if (wsError && wsError.code !== 'PGRST116') {
+      // PGRST116 = no rows, which is fine for new instances
+      console.error('Failed to fetch workspace data:', wsError);
       workspaceError = 'Unable to load workspace data';
+    } else if (workspaceData) {
+      lastSyncedAt = workspaceData.synced_at;
+      const stats = workspaceData.stats || {};
+      const projects = workspaceData.projects || [];
+      const tasks = workspaceData.tasks || [];
+      const inbox = workspaceData.inbox || [];
+      const ideas = workspaceData.ideas || [];
+
+      workspaceStats = {
+        inboxCount: stats.inboxCount ?? inbox.length,
+        activeProjectsCount: stats.activeProjectsCount ?? projects.filter((p: any) => p.status === 'active').length,
+        tasksDoneThisWeek: stats.tasksDoneThisWeek ?? 0,
+        ideasCount: stats.ideasCount ?? ideas.length,
+        activeProjects: projects.filter((p: any) => p.status === 'active').slice(0, 5),
+        recentTasks: tasks.filter((t: any) => t.status !== 'done').slice(0, 5),
+        recentInbox: inbox.slice(0, 5),
+        recentIdeas: ideas.slice(0, 5),
+      };
+    } else {
+      // No workspace data yet - assistant hasn't synced
+      workspaceError = 'Waiting for assistant to sync workspace data...';
     }
   }
 
