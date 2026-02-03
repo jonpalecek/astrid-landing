@@ -103,7 +103,7 @@ export async function getAdminConfig(): Promise<AdminAPIConfig> {
 export async function callAdminAPI<T = unknown>(
   path: string,
   options: {
-    method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     body?: unknown;
     timeout?: number;
   } = {}
