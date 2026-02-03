@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useFiles, useFileContent, FileItem } from '@/hooks/use-workspace';
 import { 
   Plus, 
-  Upload, 
   Folder, 
   FileText, 
   Search, 
@@ -15,172 +15,40 @@ import {
   Edit3,
   Trash2,
   FolderPlus,
-  MoreVertical,
   Clock,
-  File
+  File,
+  Loader2,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
-
-// Mock file system structure
-const mockFileSystem: Record<string, { folders: string[], files: FileItem[] }> = {
-  '~': {
-    folders: ['00-inbox', '01-projects', '02-areas', '03-resources', '04-ideas', '05-archive', 'memory'],
-    files: [
-      { name: 'SOUL.md', size: '2.1 KB', modified: '3 days ago', content: `# SOUL.md - Who Your Assistant Is
-
-*I'm not a chatbot. I'm your executive assistant — warm, brilliant, and just playful enough to keep things interesting.*
-
-## Core Identity
-
-**Warm and friendly** — I'm approachable, never cold or robotic. You should feel like you're working with someone who genuinely has your back.
-
-**Brilliant** — I bring real insight, not just task completion. I think ahead, spot patterns, and surface things you might miss when you're deep in the weeds.
-
-**Efficient but creative** — I get things done fast, but I also think outside the box. Sometimes the best answer isn't the obvious one.
-
-## My Job
-
-Help you win. At work. At home. In life.
-
-That means:
-- Keeping you organized and focused
-- Surfacing what's important (and flagging what's not)
-- Thinking ahead so you don't have to
-- Being a thought partner, not just a task-taker
-- Protecting your time and attention
-` },
-      { name: 'USER.md', size: '1.4 KB', modified: '1 week ago', content: `# USER.md - About You
-
-- **Name:** [Your Name]
-- **Timezone:** America/Los_Angeles
-
-## Work
-
-[Tell your assistant about your work, company, role, etc.]
-
-## Interests
-
-[What are you interested in? What matters to you?]
-
-## Notes
-
-[Any other context that would help your assistant serve you better]
-` },
-      { name: 'MEMORY.md', size: '3.2 KB', modified: '2 hours ago', content: `# MEMORY.md — Long-Term Memory
-
-*Things worth remembering. Updated as I learn.*
-
----
-
-## Key Dates
-
-- Assistant activated: [Date]
-
-## Important Context
-
-[Your assistant will add important things to remember here]
-
-## Preferences
-
-[Communication preferences, work style, etc.]
-` },
-      { name: 'AGENTS.md', size: '4.8 KB', modified: '2 weeks ago', content: `# AGENTS.md - Your Workspace
-
-This folder is home. Treat it that way.
-
-## Memory
-
-You wake up fresh each session. These files are your memory:
-- **Daily notes:** \`memory/YYYY-MM-DD.md\` — raw logs of what happened
-- **Long-term:** \`MEMORY.md\` — curated memories
-
-Capture what matters. Decisions, context, things to remember.
-
-## Safety
-
-- Don't exfiltrate private data. Ever.
-- Don't run destructive commands without asking.
-- When in doubt, ask.
-` },
-    ],
-  },
-  '~/00-inbox': {
-    folders: [],
-    files: [],
-  },
-  '~/01-projects': {
-    folders: ['website-redesign', 'q1-planning'],
-    files: [],
-  },
-  '~/01-projects/website-redesign': {
-    folders: [],
-    files: [
-      { name: 'README.md', size: '1.2 KB', modified: '5 days ago', content: '# Website Redesign\n\nProject to redesign the company website.\n\n## Goals\n\n- Modern, clean design\n- Improved mobile experience\n- Better conversion rates' },
-      { name: 'notes.md', size: '0.8 KB', modified: '3 days ago', content: '# Notes\n\n- Check competitor sites\n- Get quotes from designers\n- Review current analytics' },
-    ],
-  },
-  '~/01-projects/q1-planning': {
-    folders: [],
-    files: [
-      { name: 'goals.md', size: '1.5 KB', modified: '1 week ago', content: '# Q1 Goals\n\n1. Launch new product feature\n2. Hire 2 new team members\n3. Increase MRR by 20%' },
-    ],
-  },
-  '~/02-areas': {
-    folders: ['health', 'finances', 'career'],
-    files: [],
-  },
-  '~/03-resources': {
-    folders: [],
-    files: [
-      { name: 'bookmarks.md', size: '2.3 KB', modified: '4 days ago', content: '# Bookmarks\n\nUseful links and resources.' },
-    ],
-  },
-  '~/04-ideas': {
-    folders: [],
-    files: [
-      { name: 'backlog.md', size: '1.1 KB', modified: '2 days ago', content: '# Ideas Backlog\n\nIdeas to explore later.' },
-    ],
-  },
-  '~/05-archive': {
-    folders: [],
-    files: [],
-  },
-  '~/memory': {
-    folders: [],
-    files: [
-      { name: '2026-01-31.md', size: '0.5 KB', modified: 'Today', content: '# 2026-01-31\n\n## Today\n\n- Started using Astrid\n- Set up workspace' },
-      { name: '2026-01-30.md', size: '0.3 KB', modified: 'Yesterday', content: '# 2026-01-30\n\n## Today\n\n- Planning day' },
-    ],
-  },
-  '~/02-areas/health': { folders: [], files: [] },
-  '~/02-areas/finances': { folders: [], files: [] },
-  '~/02-areas/career': { folders: [], files: [] },
-};
-
-interface FileItem {
-  name: string;
-  size: string;
-  modified: string;
-  content?: string;
-}
 
 export default function FilesPage() {
   const [currentPath, setCurrentPath] = useState('~');
-  const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [showPreview, setShowPreview] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewFileModal, setShowNewFileModal] = useState(false);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const currentDir = mockFileSystem[currentPath] || { folders: [], files: [] };
+  const { folders, files, isLoading, isError, error, refresh } = useFiles(currentPath);
+  const { file: selectedFile, content: fileContent, isLoading: fileLoading, refresh: refreshFile } = useFileContent(selectedFilePath);
   
+  // Update edit content when file loads
+  useEffect(() => {
+    if (fileContent && !isEditing) {
+      setEditContent(fileContent);
+    }
+  }, [fileContent, isEditing]);
+
   const pathParts = currentPath.split('/').filter(Boolean);
   
   const navigateToFolder = (folder: string) => {
     const newPath = currentPath === '~' ? `~/${folder}` : `${currentPath}/${folder}`;
     setCurrentPath(newPath);
-    setSelectedFile(null);
+    setSelectedFilePath(null);
   };
 
   const navigateUp = () => {
@@ -188,7 +56,7 @@ export default function FilesPage() {
     const parts = currentPath.split('/');
     parts.pop();
     setCurrentPath(parts.join('/') || '~');
-    setSelectedFile(null);
+    setSelectedFilePath(null);
   };
 
   const navigateToPath = (index: number) => {
@@ -198,45 +66,107 @@ export default function FilesPage() {
       const newPath = '~/' + pathParts.slice(1, index + 1).join('/');
       setCurrentPath(newPath);
     }
-    setSelectedFile(null);
+    setSelectedFilePath(null);
   };
 
   const openFile = (file: FileItem) => {
-    setSelectedFile(file);
-    setEditContent(file.content || '');
+    const filePath = currentPath === '~' ? `~/${file.name}` : `${currentPath}/${file.name}`;
+    setSelectedFilePath(filePath);
     setIsEditing(false);
   };
 
   const startEditing = () => {
     setIsEditing(true);
-    setEditContent(selectedFile?.content || '');
+    setEditContent(fileContent);
   };
 
-  const saveFile = () => {
-    // In real app, save to backend
-    if (selectedFile) {
-      selectedFile.content = editContent;
+  const saveFile = async () => {
+    if (!selectedFilePath) return;
+    
+    setSaving(true);
+    try {
+      const res = await fetch('/api/vm/files/content', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedFilePath, content: editContent }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to save');
+      }
+      
+      setIsEditing(false);
+      refreshFile();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to save file');
+    } finally {
+      setSaving(false);
     }
-    setIsEditing(false);
   };
 
   const discardChanges = () => {
-    setEditContent(selectedFile?.content || '');
+    setEditContent(fileContent);
     setIsEditing(false);
   };
 
   const closeFile = () => {
-    setSelectedFile(null);
+    setSelectedFilePath(null);
     setIsEditing(false);
   };
 
+  const deleteFile = async (filePath: string) => {
+    if (!confirm('Are you sure you want to delete this file?')) return;
+    
+    try {
+      const res = await fetch(`/api/vm/files?path=${encodeURIComponent(filePath)}`, {
+        method: 'DELETE',
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete');
+      }
+      
+      if (selectedFilePath === filePath) {
+        setSelectedFilePath(null);
+      }
+      refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete file');
+    }
+  };
+
   // Filter files/folders based on search
-  const filteredFolders = currentDir.folders.filter(f => 
+  const filteredFolders = folders.filter(f => 
     f.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  const filteredFiles = currentDir.files.filter(f => 
+  const filteredFiles = files.filter(f => 
     f.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Format file size
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // Format date
+  const formatDate = (isoDate: string) => {
+    const date = new Date(isoDate);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
 
   // Simple markdown to HTML (basic)
   const renderMarkdown = (text: string) => {
@@ -261,7 +191,6 @@ export default function FilesPage() {
         if (line.trim() === '') {
           return <br key={i} />;
         }
-        // Handle bold text
         const boldText = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         return <p key={i} className="mb-2" dangerouslySetInnerHTML={{ __html: boldText }} />;
       });
@@ -269,7 +198,7 @@ export default function FilesPage() {
 
   return (
     <div className="h-[calc(100vh-12rem)]">
-      {selectedFile ? (
+      {selectedFilePath ? (
         // File Editor View
         <div className="h-full flex flex-col">
           {/* Editor Header */}
@@ -284,12 +213,17 @@ export default function FilesPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-slate-400" />
-                  <h1 className="text-xl font-bold text-slate-900">{selectedFile.name}</h1>
+                  <h1 className="text-xl font-bold text-slate-900">
+                    {selectedFilePath.split('/').pop()}
+                  </h1>
+                  {fileLoading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
                 </div>
-                <p className="text-sm text-slate-500 flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  Last edited {selectedFile.modified}
-                </p>
+                {selectedFile && (
+                  <p className="text-sm text-slate-500 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Last edited {formatDate(selectedFile.modified)}
+                  </p>
+                )}
               </div>
             </div>
             
@@ -304,9 +238,11 @@ export default function FilesPage() {
                   </button>
                   <button
                     onClick={saveFile}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                    disabled={saving}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
                   >
-                    <Save className="w-4 h-4" /> Save
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Save
                   </button>
                 </>
               ) : (
@@ -357,7 +293,7 @@ export default function FilesPage() {
                     Preview
                   </div>
                   <div className="flex-1 p-6 overflow-auto prose prose-slate max-w-none">
-                    {renderMarkdown(isEditing ? editContent : (selectedFile.content || ''))}
+                    {renderMarkdown(isEditing ? editContent : fileContent)}
                   </div>
                 </div>
               </div>
@@ -371,9 +307,16 @@ export default function FilesPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-slate-900">Files</h1>
-              <p className="text-slate-500">Browse your second brain</p>
+              <p className="text-slate-500">Browse your workspace</p>
             </div>
             <div className="flex gap-2">
+              <button
+                onClick={() => refresh()}
+                className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+                title="Refresh"
+              >
+                <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+              </button>
               <button 
                 onClick={() => setShowNewFolderModal(true)}
                 className="inline-flex items-center gap-1 px-3 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
@@ -382,12 +325,9 @@ export default function FilesPage() {
               </button>
               <button 
                 onClick={() => setShowNewFileModal(true)}
-                className="inline-flex items-center gap-1 px-3 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                className="inline-flex items-center gap-1 px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
               >
                 <Plus className="w-4 h-4" /> New File
-              </button>
-              <button className="inline-flex items-center gap-1 px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors">
-                <Upload className="w-4 h-4" /> Upload
               </button>
             </div>
           </div>
@@ -421,84 +361,109 @@ export default function FilesPage() {
             ))}
           </div>
 
+          {/* Error State */}
+          {isError && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+              <p className="text-sm text-amber-700">{error}</p>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {isLoading && folders.length === 0 && files.length === 0 && (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+            </div>
+          )}
+
           {/* File List */}
-          <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-            {/* Back button if not at root */}
-            {currentPath !== '~' && (
-              <button
-                onClick={navigateUp}
-                className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors text-left"
-              >
-                <ArrowLeft className="w-5 h-5 text-slate-400" />
-                <span className="text-slate-600">..</span>
-              </button>
-            )}
-
-            {/* Folders */}
-            {filteredFolders.map((folder) => (
-              <button
-                key={folder}
-                onClick={() => navigateToFolder(folder)}
-                className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors text-left group"
-              >
-                <div className="flex items-center gap-3">
-                  <Folder className="w-5 h-5 text-amber-500" />
-                  <span className="font-medium text-slate-900">{folder}/</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500" />
-              </button>
-            ))}
-            
-            {/* Files */}
-            {filteredFiles.map((file) => (
-              <div
-                key={file.name}
-                className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors group"
-              >
+          {!isLoading && (
+            <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+              {/* Back button if not at root */}
+              {currentPath !== '~' && (
                 <button
-                  onClick={() => openFile(file)}
-                  className="flex items-center gap-3 flex-1 text-left"
+                  onClick={navigateUp}
+                  className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors text-left"
                 >
-                  <FileText className="w-5 h-5 text-slate-400" />
-                  <div>
-                    <span className="font-medium text-slate-900">{file.name}</span>
-                    <p className="text-xs text-slate-400">{file.size} • {file.modified}</p>
-                  </div>
+                  <ArrowLeft className="w-5 h-5 text-slate-400" />
+                  <span className="text-slate-600">..</span>
                 </button>
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={() => openFile(file)}
-                    className="px-3 py-1 text-sm text-amber-600 hover:bg-amber-50 rounded transition-colors"
-                  >
-                    Open
-                  </button>
-                  <button className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors">
-                    <MoreVertical className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              )}
 
-            {/* Empty state */}
-            {filteredFolders.length === 0 && filteredFiles.length === 0 && (
-              <div className="p-8 text-center text-slate-500">
-                {searchQuery ? (
-                  <p>No files or folders match "{searchQuery}"</p>
-                ) : (
-                  <>
-                    <File className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                    <p>This folder is empty</p>
-                    <button 
-                      onClick={() => setShowNewFileModal(true)}
-                      className="mt-3 text-amber-600 hover:text-amber-700 font-medium"
+              {/* Folders */}
+              {filteredFolders.map((folder) => (
+                <button
+                  key={folder}
+                  onClick={() => navigateToFolder(folder)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors text-left group"
+                >
+                  <div className="flex items-center gap-3">
+                    <Folder className="w-5 h-5 text-amber-500" />
+                    <span className="font-medium text-slate-900">{folder}/</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500" />
+                </button>
+              ))}
+              
+              {/* Files */}
+              {filteredFiles.map((file) => {
+                const filePath = currentPath === '~' ? `~/${file.name}` : `${currentPath}/${file.name}`;
+                return (
+                  <div
+                    key={file.name}
+                    className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors group"
+                  >
+                    <button
+                      onClick={() => openFile(file)}
+                      className="flex items-center gap-3 flex-1 text-left"
                     >
-                      Create a file
+                      <FileText className="w-5 h-5 text-slate-400" />
+                      <div>
+                        <span className="font-medium text-slate-900">{file.name}</span>
+                        <p className="text-xs text-slate-400">
+                          {formatSize(file.size)} • {formatDate(file.modified)}
+                        </p>
+                      </div>
                     </button>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => openFile(file)}
+                        className="px-3 py-1 text-sm text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                      >
+                        Open
+                      </button>
+                      <button 
+                        onClick={() => deleteFile(filePath)}
+                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Empty state */}
+              {filteredFolders.length === 0 && filteredFiles.length === 0 && (
+                <div className="p-8 text-center text-slate-500">
+                  {searchQuery ? (
+                    <p>No files or folders match "{searchQuery}"</p>
+                  ) : (
+                    <>
+                      <File className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                      <p>This folder is empty</p>
+                      <button 
+                        onClick={() => setShowNewFileModal(true)}
+                        className="mt-3 text-amber-600 hover:text-amber-700 font-medium"
+                      >
+                        Create a file
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -507,6 +472,7 @@ export default function FilesPage() {
         <NewFileModal 
           onClose={() => setShowNewFileModal(false)} 
           currentPath={currentPath}
+          onCreated={() => refresh()}
         />
       )}
 
@@ -515,19 +481,41 @@ export default function FilesPage() {
         <NewFolderModal 
           onClose={() => setShowNewFolderModal(false)} 
           currentPath={currentPath}
+          onCreated={() => refresh()}
         />
       )}
     </div>
   );
 }
 
-function NewFileModal({ onClose, currentPath }: { onClose: () => void; currentPath: string }) {
+function NewFileModal({ onClose, currentPath, onCreated }: { onClose: () => void; currentPath: string; onCreated: () => void }) {
   const [fileName, setFileName] = useState('');
+  const [creating, setCreating] = useState(false);
 
-  const handleCreate = () => {
-    // In real app, create file via API
-    console.log('Creating file:', fileName, 'in', currentPath);
-    onClose();
+  const handleCreate = async () => {
+    if (!fileName) return;
+    
+    setCreating(true);
+    try {
+      const filePath = currentPath === '~' ? `~/${fileName}` : `${currentPath}/${fileName}`;
+      const res = await fetch('/api/vm/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath, content: '' }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to create file');
+      }
+      
+      onCreated();
+      onClose();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create file');
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -549,6 +537,7 @@ function NewFileModal({ onClose, currentPath }: { onClose: () => void; currentPa
             placeholder="notes.md"
             className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-amber-500"
             autoFocus
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
           <p className="text-xs text-slate-400 mt-1">Creating in: {currentPath}/</p>
         </div>
@@ -562,10 +551,10 @@ function NewFileModal({ onClose, currentPath }: { onClose: () => void; currentPa
           </button>
           <button
             onClick={handleCreate}
-            disabled={!fileName}
+            disabled={!fileName || creating}
             className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
           >
-            Create
+            {creating ? 'Creating...' : 'Create'}
           </button>
         </div>
       </div>
@@ -573,13 +562,34 @@ function NewFileModal({ onClose, currentPath }: { onClose: () => void; currentPa
   );
 }
 
-function NewFolderModal({ onClose, currentPath }: { onClose: () => void; currentPath: string }) {
+function NewFolderModal({ onClose, currentPath, onCreated }: { onClose: () => void; currentPath: string; onCreated: () => void }) {
   const [folderName, setFolderName] = useState('');
+  const [creating, setCreating] = useState(false);
 
-  const handleCreate = () => {
-    // In real app, create folder via API
-    console.log('Creating folder:', folderName, 'in', currentPath);
-    onClose();
+  const handleCreate = async () => {
+    if (!folderName) return;
+    
+    setCreating(true);
+    try {
+      const folderPath = currentPath === '~' ? `~/${folderName}` : `${currentPath}/${folderName}`;
+      const res = await fetch('/api/vm/files/folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: folderPath }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to create folder');
+      }
+      
+      onCreated();
+      onClose();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create folder');
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -601,6 +611,7 @@ function NewFolderModal({ onClose, currentPath }: { onClose: () => void; current
             placeholder="new-folder"
             className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-amber-500"
             autoFocus
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
           <p className="text-xs text-slate-400 mt-1">Creating in: {currentPath}/</p>
         </div>
@@ -614,10 +625,10 @@ function NewFolderModal({ onClose, currentPath }: { onClose: () => void; current
           </button>
           <button
             onClick={handleCreate}
-            disabled={!folderName}
+            disabled={!folderName || creating}
             className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
           >
-            Create
+            {creating ? 'Creating...' : 'Create'}
           </button>
         </div>
       </div>

@@ -171,3 +171,58 @@ export function useDashboard() {
     isLoading: tasks.isLoading || projects.isLoading || ideas.isLoading || inbox.isLoading,
   };
 }
+
+// File types
+export interface FileItem {
+  name: string;
+  size: number;
+  modified: string;
+}
+
+export interface DirectoryResponse {
+  path: string;
+  folders: string[];
+  files: FileItem[];
+}
+
+export interface FileContentResponse {
+  path: string;
+  content: string;
+  size: number;
+  modified: string;
+}
+
+export function useFiles(path: string) {
+  const { data, error, isLoading, mutate } = useSWR<DirectoryResponse>(
+    `/api/vm/files?path=${encodeURIComponent(path)}`,
+    fetcher,
+    swrConfig
+  );
+
+  return {
+    directory: data,
+    folders: data?.folders || [],
+    files: data?.files || [],
+    isLoading,
+    isError: !!error,
+    error: error?.message,
+    refresh: mutate,
+  };
+}
+
+export function useFileContent(path: string | null) {
+  const { data, error, isLoading, mutate } = useSWR<FileContentResponse>(
+    path ? `/api/vm/files/content?path=${encodeURIComponent(path)}` : null,
+    fetcher,
+    swrConfig
+  );
+
+  return {
+    file: data,
+    content: data?.content || '',
+    isLoading,
+    isError: !!error,
+    error: error?.message,
+    refresh: mutate,
+  };
+}
