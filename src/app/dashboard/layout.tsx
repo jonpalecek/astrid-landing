@@ -18,7 +18,7 @@ export default async function DashboardLayout({
   // Get instance info for chat widget
   const { data: instance } = await supabase
     .from('instances')
-    .select('assistant_name, assistant_emoji, status')
+    .select('assistant_name, assistant_emoji, status, tunnel_hostname, gateway_token')
     .eq('user_id', user.id)
     .single();
 
@@ -32,8 +32,10 @@ export default async function DashboardLayout({
       </main>
       {showChat && (
         <ChatWidget 
-          assistantName={instance?.assistant_name || 'Astrid'} 
-          assistantEmoji={instance?.assistant_emoji || '✨'} 
+          assistantName={instance?.assistant_name || 'Sam'} 
+          assistantEmoji={instance?.assistant_emoji || '✨'}
+          tunnelUrl={instance?.tunnel_hostname || undefined}
+          gatewayToken={instance?.gateway_token || undefined}
         />
       )}
     </div>
