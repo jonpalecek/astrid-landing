@@ -271,13 +271,15 @@ export default function ChatWidget({
     try {
       // Send via WebSocket
       if (wsRef.current?.readyState === WebSocket.OPEN) {
+        const msgId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
         wsRef.current.send(JSON.stringify({
           type: 'req',
-          id: `chat-${Date.now()}`,
+          id: `chat-${msgId}`,
           method: 'chat.send',
           params: {
             message: messageText,
             sessionKey: 'dashboard-chat',
+            idempotencyKey: msgId,
           }
         }));
       } else {
