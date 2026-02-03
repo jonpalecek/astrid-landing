@@ -20,14 +20,15 @@ import {
   Loader2,
   RefreshCw,
   AlertCircle,
-  BookOpen
+  BookOpen,
+  Sparkles
 } from 'lucide-react';
 
-// User files root
-const USER_FILES_ROOT = '~/user/files';
+// Knowledge Base root
+const KNOWLEDGE_ROOT = '~/user/knowledge';
 
-export default function FilesPage() {
-  const [currentPath, setCurrentPath] = useState(USER_FILES_ROOT);
+export default function KnowledgeBasePage() {
+  const [currentPath, setCurrentPath] = useState(KNOWLEDGE_ROOT);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
@@ -40,7 +41,6 @@ export default function FilesPage() {
   const { folders, files, isLoading, isError, error, refresh } = useFiles(currentPath);
   const { file: selectedFile, content: fileContent, isLoading: fileLoading, refresh: refreshFile } = useFileContent(selectedFilePath);
   
-  // Update edit content when file loads
   useEffect(() => {
     if (fileContent && !isEditing) {
       setEditContent(fileContent);
@@ -50,20 +50,18 @@ export default function FilesPage() {
   const pathParts = currentPath.split('/').filter(Boolean);
   
   const navigateToFolder = (folder: string) => {
-    const newPath = currentPath === '~' ? `~/${folder}` : `${currentPath}/${folder}`;
+    const newPath = `${currentPath}/${folder}`;
     setCurrentPath(newPath);
     setSelectedFilePath(null);
   };
 
   const navigateUp = () => {
-    // Don't navigate above files root
-    if (currentPath === USER_FILES_ROOT) return;
+    if (currentPath === KNOWLEDGE_ROOT) return;
     const parts = currentPath.split('/');
     parts.pop();
     const newPath = parts.join('/');
-    // Ensure we don't go above files root
-    if (!newPath.startsWith(USER_FILES_ROOT)) {
-      setCurrentPath(USER_FILES_ROOT);
+    if (!newPath.startsWith(KNOWLEDGE_ROOT)) {
+      setCurrentPath(KNOWLEDGE_ROOT);
     } else {
       setCurrentPath(newPath);
     }
@@ -71,14 +69,9 @@ export default function FilesPage() {
   };
 
   const navigateToPath = (index: number) => {
-    // Build path from files root (~/user/files = 3 parts)
-    const rootParts = USER_FILES_ROOT.split('/');
-    
     if (index <= 2) {
-      // Clicked on Files root or above
-      setCurrentPath(USER_FILES_ROOT);
+      setCurrentPath(KNOWLEDGE_ROOT);
     } else {
-      // Build path to the clicked index
       const newPath = pathParts.slice(0, index + 1).join('/');
       setCurrentPath(newPath);
     }
@@ -86,7 +79,7 @@ export default function FilesPage() {
   };
 
   const openFile = (file: FileItem) => {
-    const filePath = currentPath === '~' ? `~/${file.name}` : `${currentPath}/${file.name}`;
+    const filePath = `${currentPath}/${file.name}`;
     setSelectedFilePath(filePath);
     setIsEditing(false);
   };
@@ -132,7 +125,7 @@ export default function FilesPage() {
   };
 
   const deleteFile = async (filePath: string) => {
-    if (!confirm('Are you sure you want to delete this file?')) return;
+    if (!confirm('Are you sure you want to delete this document?')) return;
     
     try {
       const res = await fetch(`/api/vm/files?path=${encodeURIComponent(filePath)}`, {
@@ -149,11 +142,10 @@ export default function FilesPage() {
       }
       refresh();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete file');
+      alert(err instanceof Error ? err.message : 'Failed to delete');
     }
   };
 
-  // Filter files/folders based on search
   const filteredFolders = folders.filter(f => 
     f.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -161,14 +153,12 @@ export default function FilesPage() {
     f.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Format file size
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // Format date
   const formatDate = (isoDate: string) => {
     const date = new Date(isoDate);
     const now = new Date();
@@ -184,7 +174,6 @@ export default function FilesPage() {
     return date.toLocaleDateString();
   };
 
-  // Simple markdown to HTML (basic)
   const renderMarkdown = (text: string) => {
     return text
       .split('\n')
@@ -215,9 +204,7 @@ export default function FilesPage() {
   return (
     <div className="h-[calc(100vh-12rem)]">
       {selectedFilePath ? (
-        // File Editor View
         <div className="h-full flex flex-col">
-          {/* Editor Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <button 
@@ -281,9 +268,7 @@ export default function FilesPage() {
             </div>
           </div>
 
-          {/* Editor Content */}
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
-            {/* Editor Pane */}
             <div className={`${!isEditing && showPreview ? 'hidden lg:block' : ''} ${!showPreview && !isEditing ? 'lg:col-span-2' : ''}`}>
               <div className="h-full bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
                 <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 text-sm font-medium text-slate-600">
@@ -301,7 +286,6 @@ export default function FilesPage() {
               </div>
             </div>
 
-            {/* Preview Pane */}
             {(showPreview || !isEditing) && (
               <div className={`${isEditing ? '' : 'lg:col-span-2'} ${!showPreview && isEditing ? 'hidden' : ''}`}>
                 <div className="h-full bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
@@ -317,16 +301,14 @@ export default function FilesPage() {
           </div>
         </div>
       ) : (
-        // File Browser View
         <div className="space-y-4">
-          {/* Header */}
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                <Folder className="w-6 h-6 text-amber-500" />
-                Files
+                <BookOpen className="w-6 h-6 text-purple-500" />
+                Knowledge Base
               </h1>
-              <p className="text-slate-500">Shared files between you and your assistant</p>
+              <p className="text-slate-500">Documents your assistant can search and reference</p>
             </div>
             <div className="flex gap-2">
               <button
@@ -344,32 +326,38 @@ export default function FilesPage() {
               </button>
               <button 
                 onClick={() => setShowNewFileModal(true)}
-                className="inline-flex items-center gap-1 px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                className="inline-flex items-center gap-1 px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
               >
-                <Plus className="w-4 h-4" /> New File
+                <Plus className="w-4 h-4" /> Add Document
               </button>
             </div>
           </div>
 
-          {/* Search */}
+          {/* Info banner */}
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-purple-800">Semantic Search Enabled</p>
+              <p className="text-purple-600">Documents here are automatically indexed. Your assistant can search and reference this content when answering questions.</p>
+            </div>
+          </div>
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search files and folders..."
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-amber-500"
+              placeholder="Search documents..."
+              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-purple-500"
             />
           </div>
 
-          {/* Breadcrumb */}
           <div className="flex items-center gap-1 text-sm">
             {pathParts.map((part, index) => {
-              // Skip ~/user, show "Files" as root for ~/user/files
               if (part === '~' || part === 'user') return null;
-              const isFilesRoot = part === 'files' && index === 2;
-              const displayName = isFilesRoot ? 'Files' : part;
+              const isKnowledgeRoot = part === 'knowledge' && index === 2;
+              const displayName = isKnowledgeRoot ? 'Knowledge Base' : part;
               const isLast = index === pathParts.length - 1;
               
               return (
@@ -377,7 +365,7 @@ export default function FilesPage() {
                   {index > 2 && <ChevronRight className="w-4 h-4 text-slate-300 mx-1" />}
                   <button
                     onClick={() => navigateToPath(index)}
-                    className={`hover:text-amber-600 transition-colors ${
+                    className={`hover:text-purple-600 transition-colors ${
                       isLast ? 'text-slate-900 font-medium' : 'text-slate-500'
                     }`}
                   >
@@ -388,7 +376,6 @@ export default function FilesPage() {
             })}
           </div>
 
-          {/* Error State */}
           {isError && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
               <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
@@ -396,18 +383,15 @@ export default function FilesPage() {
             </div>
           )}
 
-          {/* Loading State */}
           {isLoading && folders.length === 0 && files.length === 0 && (
             <div className="flex items-center justify-center h-64">
-              <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+              <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
             </div>
           )}
 
-          {/* File List */}
           {!isLoading && (
             <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-              {/* Back button if not at knowledge base root */}
-              {currentPath !== USER_FILES_ROOT && (
+              {currentPath !== KNOWLEDGE_ROOT && (
                 <button
                   onClick={navigateUp}
                   className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors text-left"
@@ -417,7 +401,6 @@ export default function FilesPage() {
                 </button>
               )}
 
-              {/* Folders */}
               {filteredFolders.map((folder) => (
                 <button
                   key={folder}
@@ -425,16 +408,15 @@ export default function FilesPage() {
                   className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors text-left group"
                 >
                   <div className="flex items-center gap-3">
-                    <Folder className="w-5 h-5 text-amber-500" />
+                    <Folder className="w-5 h-5 text-purple-500" />
                     <span className="font-medium text-slate-900">{folder}/</span>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500" />
                 </button>
               ))}
               
-              {/* Files */}
               {filteredFiles.map((file) => {
-                const filePath = currentPath === '~' ? `~/${file.name}` : `${currentPath}/${file.name}`;
+                const filePath = `${currentPath}/${file.name}`;
                 return (
                   <div
                     key={file.name}
@@ -455,7 +437,7 @@ export default function FilesPage() {
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={() => openFile(file)}
-                        className="px-3 py-1 text-sm text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                        className="px-3 py-1 text-sm text-purple-600 hover:bg-purple-50 rounded transition-colors"
                       >
                         Open
                       </button>
@@ -470,21 +452,20 @@ export default function FilesPage() {
                 );
               })}
 
-              {/* Empty state */}
               {filteredFolders.length === 0 && filteredFiles.length === 0 && (
                 <div className="p-8 text-center text-slate-500">
                   {searchQuery ? (
-                    <p>No files or folders match "{searchQuery}"</p>
+                    <p>No documents match "{searchQuery}"</p>
                   ) : (
                     <>
-                      <File className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                      <p className="font-medium text-slate-700 mb-1">No files here yet</p>
-                      <p className="text-sm mb-4">Your assistant can create files here, or you can add your own.</p>
+                      <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                      <p className="font-medium text-slate-700 mb-1">Your Knowledge Base is empty</p>
+                      <p className="text-sm mb-4">Add documents here that you want your assistant to know about.</p>
                       <button 
                         onClick={() => setShowNewFileModal(true)}
-                        className="text-amber-600 hover:text-amber-700 font-medium"
+                        className="text-purple-600 hover:text-purple-700 font-medium"
                       >
-                        Create a file
+                        Add your first document
                       </button>
                     </>
                   )}
@@ -495,7 +476,6 @@ export default function FilesPage() {
         </div>
       )}
 
-      {/* New File Modal */}
       {showNewFileModal && (
         <NewFileModal 
           onClose={() => setShowNewFileModal(false)} 
@@ -504,7 +484,6 @@ export default function FilesPage() {
         />
       )}
 
-      {/* New Folder Modal */}
       {showNewFolderModal && (
         <NewFolderModal 
           onClose={() => setShowNewFolderModal(false)} 
@@ -523,24 +502,26 @@ function NewFileModal({ onClose, currentPath, onCreated }: { onClose: () => void
   const handleCreate = async () => {
     if (!fileName) return;
     
+    const finalName = fileName.endsWith('.md') ? fileName : `${fileName}.md`;
+    
     setCreating(true);
     try {
-      const filePath = currentPath === '~' ? `~/${fileName}` : `${currentPath}/${fileName}`;
+      const filePath = `${currentPath}/${finalName}`;
       const res = await fetch('/api/vm/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: '' }),
+        body: JSON.stringify({ path: filePath, content: `# ${fileName.replace('.md', '')}\n\n` }),
       });
       
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Failed to create file');
+        throw new Error(data.error || 'Failed to create document');
       }
       
       onCreated();
       onClose();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to create file');
+      alert(err instanceof Error ? err.message : 'Failed to create document');
     } finally {
       setCreating(false);
     }
@@ -550,24 +531,24 @@ function NewFileModal({ onClose, currentPath, onCreated }: { onClose: () => void
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-900">New File</h2>
+          <h2 className="text-lg font-semibold text-slate-900">New Document</h2>
           <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-slate-700 mb-1">File Name</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Document Name</label>
           <input
             type="text"
             value={fileName}
             onChange={(e) => setFileName(e.target.value)}
-            placeholder="notes.md"
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-amber-500"
+            placeholder="my-notes"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-purple-500"
             autoFocus
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
-          <p className="text-xs text-slate-400 mt-1">Creating in: {currentPath}/</p>
+          <p className="text-xs text-slate-400 mt-1">.md extension will be added automatically</p>
         </div>
 
         <div className="flex justify-end gap-2">
@@ -580,7 +561,7 @@ function NewFileModal({ onClose, currentPath, onCreated }: { onClose: () => void
           <button
             onClick={handleCreate}
             disabled={!fileName || creating}
-            className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 transition-colors"
           >
             {creating ? 'Creating...' : 'Create'}
           </button>
@@ -599,7 +580,7 @@ function NewFolderModal({ onClose, currentPath, onCreated }: { onClose: () => vo
     
     setCreating(true);
     try {
-      const folderPath = currentPath === '~' ? `~/${folderName}` : `${currentPath}/${folderName}`;
+      const folderPath = `${currentPath}/${folderName}`;
       const res = await fetch('/api/vm/files/folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -636,12 +617,11 @@ function NewFolderModal({ onClose, currentPath, onCreated }: { onClose: () => vo
             type="text"
             value={folderName}
             onChange={(e) => setFolderName(e.target.value)}
-            placeholder="new-folder"
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-amber-500"
+            placeholder="my-folder"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-purple-500"
             autoFocus
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
-          <p className="text-xs text-slate-400 mt-1">Creating in: {currentPath}/</p>
         </div>
 
         <div className="flex justify-end gap-2">
@@ -654,7 +634,7 @@ function NewFolderModal({ onClose, currentPath, onCreated }: { onClose: () => vo
           <button
             onClick={handleCreate}
             disabled={!folderName || creating}
-            className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 transition-colors"
           >
             {creating ? 'Creating...' : 'Create'}
           </button>

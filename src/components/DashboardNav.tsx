@@ -11,7 +11,8 @@ import {
   CheckSquare,
   Inbox, 
   Lightbulb, 
-  FolderOpen, 
+  FolderOpen,
+  BookOpen,
   Settings,
   LogOut,
   ChevronDown
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Inbox', href: '/dashboard/inbox', icon: Inbox },
   { name: 'Ideas', href: '/dashboard/ideas', icon: Lightbulb },
   { name: 'Files', href: '/dashboard/files', icon: FolderOpen },
+  { name: 'Knowledge', href: '/dashboard/knowledge', icon: BookOpen },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
