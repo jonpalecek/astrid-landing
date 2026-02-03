@@ -97,9 +97,11 @@ export async function callAdminAPI<T = unknown>(
       headers: {
         'Authorization': `Bearer ${config.gatewayToken}`,
         'Content-Type': 'application/json',
+        'User-Agent': 'Astrid-Dashboard/1.0',
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
+      cache: 'no-store',  // Disable Next.js fetch caching
     });
 
     clearTimeout(timeoutId);
