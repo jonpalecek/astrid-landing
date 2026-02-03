@@ -1,76 +1,74 @@
-import { createClient } from '@/lib/supabase-server';
+'use client';
+
+import { useEffect, useState } from 'react';
 import { 
   Rocket, 
   Target, 
   Check, 
   Clock,
   AlertCircle,
-  Pause
+  Pause,
+  Loader2
 } from 'lucide-react';
+
+interface ProjectTask {
+  id: string;
+  title: string;
+  done: boolean;
+  due?: string;
+  priority?: string;
+}
 
 interface Project {
   id: string;
   name: string;
   status: string;
   description?: string;
-  tasks: Array<{
-    id: string;
-    title: string;
-    status: string;
-    due?: string;
-    priority?: string;
-  }>;
+  tasks: ProjectTask[];
 }
 
-export default async function ProjectsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+export default function ProjectsPage() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Get user's instance
-  const { data: instance } = await supabase
-    .from('instances')
-    .select('id, status')
-    .eq('user_id', user?.id)
-    .single();
-
-  let projects: Project[] = [];
-  let error: string | null = null;
-  let lastSynced: string | null = null;
-
-  if (instance?.status === 'active' && instance?.id) {
-    const { data: workspaceData, error: wsError } = await supabase
-      .from('workspace_data')
-      .select('projects, synced_at')
-      .eq('instance_id', instance.id)
-      .single();
-
-    if (wsError && wsError.code !== 'PGRST116') {
-      error = 'Unable to load projects';
-    } else if (workspaceData) {
-      projects = workspaceData.projects || [];
-      lastSynced = workspaceData.synced_at;
-    } else {
-      error = 'Waiting for assistant to sync...';
+  useEffect(() => {
+    async function fetchProjects() {
+      try {
+        const res = await fetch('/api/vm/projects');
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to load projects');
+        }
+        const data = await res.json();
+        setProjects(data.projects || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load projects');
+      } finally {
+        setLoading(false);
+      }
     }
-  }
+    fetchProjects();
+  }, []);
 
   const activeProjects = projects.filter(p => p.status === 'active');
   const onHoldProjects = projects.filter(p => p.status === 'on-hold');
   const completedProjects = projects.filter(p => p.status === 'completed');
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Projects</h1>
-          <p className="text-slate-500">Manage your active work</p>
-        </div>
-        {lastSynced && (
-          <p className="text-xs text-slate-400">
-            Synced {new Date(lastSynced).toLocaleString()}
-          </p>
-        )}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Projects</h1>
+        <p className="text-slate-500">Manage your active work</p>
       </div>
 
       {/* Error State */}
@@ -81,29 +79,12 @@ export default async function ProjectsPage() {
         </div>
       )}
 
-      {/* No Instance State */}
-      {!instance?.id && (
-        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <Target className="w-12 h-12 mx-auto mb-4 text-slate-300" />
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">No assistant connected</h2>
-          <p className="text-slate-500 mb-6">
-            Set up your assistant to start tracking projects.
-          </p>
-          <a 
-            href="/dashboard/onboarding"
-            className="inline-flex items-center gap-1 px-6 py-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
-          >
-            Get Started
-          </a>
-        </div>
-      )}
-
       {/* Empty State */}
-      {instance?.id && projects.length === 0 && !error && (
+      {!error && projects.length === 0 && (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
           <Target className="w-12 h-12 mx-auto mb-4 text-slate-300" />
           <h2 className="text-xl font-semibold text-slate-900 mb-2">No projects yet</h2>
-          <p className="text-slate-500 mb-6">
+          <p className="text-slate-500">
             Ask your assistant to help you create and track projects!
           </p>
         </div>
@@ -166,7 +147,7 @@ function ProjectSection({
 
 function ProjectCard({ project }: { project: Project }) {
   const totalTasks = project.tasks.length;
-  const doneTasks = project.tasks.filter(t => t.status === 'done').length;
+  const doneTasks = project.tasks.filter(t => t.done).length;
   const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   return (
@@ -198,18 +179,13 @@ function ProjectCard({ project }: { project: Project }) {
           {project.tasks.map((task) => (
             <li key={task.id} className="flex items-center gap-2 text-sm">
               <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                task.status === 'done' 
+                task.done 
                   ? 'bg-green-100 border-green-300 text-green-600' 
-                  : task.status === 'blocked'
-                  ? 'bg-red-100 border-red-300 text-red-600'
-                  : task.status === 'in-progress'
-                  ? 'bg-blue-100 border-blue-300'
                   : 'border-slate-300'
               }`}>
-                {task.status === 'done' && <Check className="w-2.5 h-2.5" />}
-                {task.status === 'blocked' && <span className="text-xs">!</span>}
+                {task.done && <Check className="w-2.5 h-2.5" />}
               </span>
-              <span className={`flex-1 ${task.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+              <span className={`flex-1 ${task.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
                 {task.title}
               </span>
               {task.due && (
@@ -218,7 +194,7 @@ function ProjectCard({ project }: { project: Project }) {
                   {task.due}
                 </span>
               )}
-              {task.priority && task.priority !== 'medium' && (
+              {task.priority && task.priority !== 'normal' && (
                 <span className={`text-xs px-1.5 py-0.5 rounded ${
                   task.priority === 'urgent' ? 'bg-red-100 text-red-700' :
                   task.priority === 'high' ? 'bg-orange-100 text-orange-700' :
