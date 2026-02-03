@@ -2,7 +2,7 @@
  * Admin Agent API Client
  * 
  * Server-side helper to proxy requests to a user's Admin Agent.
- * Handles auth lookup and token management.
+ * Handles auth lookup and token management with caching.
  */
 
 import { createClient } from '@/lib/supabase-server';
@@ -23,26 +23,45 @@ export class AdminAPIError extends Error {
   }
 }
 
+// In-memory cache for instance config (per user)
+// TTL: 5 minutes - user's VM config rarely changes
+const CONFIG_CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface CachedConfig {
+  config: AdminAPIConfig;
+  expiresAt: number;
+}
+
+const configCache = new Map<string, CachedConfig>();
+
 /**
- * Get the Admin Agent config for the current user
+ * Get the Admin Agent config for the current user (with caching)
  */
 export async function getAdminConfig(): Promise<AdminAPIConfig> {
   const supabase = await createClient();
   
+  // Get user first (required for cache key)
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  console.log('[AdminAPI] User lookup:', user?.id || 'none', authError?.message || 'ok');
   
   if (authError || !user) {
     throw new AdminAPIError('Unauthorized', 401, 'AUTH_ERROR');
   }
 
+  // Check cache
+  const cached = configCache.get(user.id);
+  if (cached && cached.expiresAt > Date.now()) {
+    console.log('[AdminAPI] Cache hit for user:', user.id.slice(0, 8));
+    return cached.config;
+  }
+
+  console.log('[AdminAPI] Cache miss, fetching instance for:', user.id.slice(0, 8));
+
+  // Fetch instance config
   const { data: instance, error: instanceError } = await supabase
     .from('instances')
     .select('tunnel_hostname, gateway_token, status')
     .eq('user_id', user.id)
     .single();
-
-  console.log('[AdminAPI] Instance lookup:', instance?.tunnel_hostname || 'none', instanceError?.message || 'ok');
 
   if (instanceError || !instance) {
     throw new AdminAPIError('No VM found for user', 404, 'NO_INSTANCE');
@@ -56,18 +75,26 @@ export async function getAdminConfig(): Promise<AdminAPIConfig> {
     throw new AdminAPIError('VM not fully configured', 503, 'INSTANCE_NOT_CONFIGURED');
   }
 
-  // Ensure URL format is correct (some values may already have https://)
+  // Ensure URL format is correct
   let tunnelUrl = instance.tunnel_hostname;
   if (!tunnelUrl.startsWith('http://') && !tunnelUrl.startsWith('https://')) {
     tunnelUrl = `https://${tunnelUrl}`;
   }
-  
-  console.log('[AdminAPI] Tunnel URL:', tunnelUrl);
 
-  return {
+  const config: AdminAPIConfig = {
     tunnelUrl,
     gatewayToken: instance.gateway_token,
   };
+
+  // Cache it
+  configCache.set(user.id, {
+    config,
+    expiresAt: Date.now() + CONFIG_CACHE_TTL_MS,
+  });
+
+  console.log('[AdminAPI] Cached config for:', user.id.slice(0, 8), '→', tunnelUrl);
+
+  return config;
 }
 
 /**
@@ -137,6 +164,14 @@ export async function callAdminAPI<T = unknown>(
       'CONNECTION_ERROR'
     );
   }
+}
+
+/**
+ * Invalidate cached config for a user (call after VM changes)
+ */
+export function invalidateConfigCache(userId: string) {
+  configCache.delete(userId);
+  console.log('[AdminAPI] Cache invalidated for:', userId.slice(0, 8));
 }
 
 /**
