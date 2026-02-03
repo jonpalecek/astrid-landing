@@ -173,10 +173,11 @@ export default function ChatWidget({
       return;
     }
 
-    // Handle chat responses
-    if (data.type === 'chat' || data.type === 'chat.chunk' || data.type === 'chat.stream') {
-      const content = data.content || data.text || data.chunk || '';
-      const isDone = data.done || data.finished || data.type === 'chat.done';
+    // Handle chat event responses (type: "event", event: "chat")
+    if (data.type === 'event' && data.event === 'chat') {
+      const payload = data.payload || {};
+      const content = payload.chunk || payload.content || payload.text || '';
+      const isDone = payload.done || payload.finished;
       
       if (content) {
         setMessages(prev => {
@@ -208,10 +209,22 @@ export default function ChatWidget({
       }
     }
 
-    // Handle chat.send acknowledgment
-    if (data.type === 'chat.send.ack' || data.id?.startsWith('chat-')) {
-      if (data.runId) {
-        setCurrentRunId(data.runId);
+    // Handle agent events (for completion detection)
+    if (data.type === 'event' && data.event === 'agent') {
+      const payload = data.payload || {};
+      // Check if agent run is complete
+      if (payload.done || payload.state === 'done' || payload.state === 'complete') {
+        setIsTyping(false);
+        setCurrentRunId(null);
+        setMessages(prev => prev.map(msg => ({ ...msg, streaming: false })));
+      }
+    }
+
+    // Handle chat.send acknowledgment (response to our request)
+    if (data.type === 'res' && data.id?.startsWith('chat-') && data.ok) {
+      const payload = data.payload || {};
+      if (payload.runId) {
+        setCurrentRunId(payload.runId);
       }
     }
 
