@@ -56,8 +56,16 @@ export async function getAdminConfig(): Promise<AdminAPIConfig> {
     throw new AdminAPIError('VM not fully configured', 503, 'INSTANCE_NOT_CONFIGURED');
   }
 
+  // Ensure URL format is correct (some values may already have https://)
+  let tunnelUrl = instance.tunnel_hostname;
+  if (!tunnelUrl.startsWith('http://') && !tunnelUrl.startsWith('https://')) {
+    tunnelUrl = `https://${tunnelUrl}`;
+  }
+  
+  console.log('[AdminAPI] Tunnel URL:', tunnelUrl);
+
   return {
-    tunnelUrl: `https://${instance.tunnel_hostname}`,
+    tunnelUrl,
     gatewayToken: instance.gateway_token,
   };
 }
@@ -80,8 +88,11 @@ export async function callAdminAPI<T = unknown>(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+  const url = `${config.tunnelUrl}/api/admin${path}`;
+  console.log('[AdminAPI] Calling:', url);
+  
   try {
-    const res = await fetch(`${config.tunnelUrl}/api/admin${path}`, {
+    const res = await fetch(url, {
       method,
       headers: {
         'Authorization': `Bearer ${config.gatewayToken}`,
@@ -92,6 +103,7 @@ export async function callAdminAPI<T = unknown>(
     });
 
     clearTimeout(timeoutId);
+    console.log('[AdminAPI] Response status:', res.status);
 
     if (!res.ok) {
       const errorBody = await res.text();
@@ -114,8 +126,11 @@ export async function callAdminAPI<T = unknown>(
       throw new AdminAPIError('Request timeout', 504, 'TIMEOUT');
     }
 
+    // Include URL in error for debugging
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[AdminAPI] Fetch error:', errMsg, 'URL:', url);
     throw new AdminAPIError(
-      `Failed to reach Admin Agent: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      `Failed to reach Admin Agent at ${url}: ${errMsg}`,
       502,
       'CONNECTION_ERROR'
     );
