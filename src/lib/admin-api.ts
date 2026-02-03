@@ -30,6 +30,8 @@ export async function getAdminConfig(): Promise<AdminAPIConfig> {
   const supabase = await createClient();
   
   const { data: { user }, error: authError } = await supabase.auth.getUser();
+  console.log('[AdminAPI] User lookup:', user?.id || 'none', authError?.message || 'ok');
+  
   if (authError || !user) {
     throw new AdminAPIError('Unauthorized', 401, 'AUTH_ERROR');
   }
@@ -39,6 +41,8 @@ export async function getAdminConfig(): Promise<AdminAPIConfig> {
     .select('tunnel_hostname, gateway_token, status')
     .eq('user_id', user.id)
     .single();
+
+  console.log('[AdminAPI] Instance lookup:', instance?.tunnel_hostname || 'none', instanceError?.message || 'ok');
 
   if (instanceError || !instance) {
     throw new AdminAPIError('No VM found for user', 404, 'NO_INSTANCE');

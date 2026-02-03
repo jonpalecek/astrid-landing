@@ -102,10 +102,22 @@ export default async function DashboardPage() {
     try {
       // Fetch all workspace data in parallel from Admin Agent
       const [tasksRes, projectsRes, inboxRes, ideasRes] = await Promise.all([
-        callAdminAPI<{ tasks: Task[] }>('/tasks').catch(() => ({ tasks: [] })),
-        callAdminAPI<{ projects: Project[] }>('/projects').catch(() => ({ projects: [] })),
-        callAdminAPI<{ items: InboxItem[] }>('/inbox').catch(() => ({ items: [] })),
-        callAdminAPI<{ ideas: Idea[] }>('/ideas').catch(() => ({ ideas: [] })),
+        callAdminAPI<{ tasks: Task[] }>('/tasks').catch((e) => {
+          console.error('Tasks API error:', e);
+          return { tasks: [] };
+        }),
+        callAdminAPI<{ projects: Project[] }>('/projects').catch((e) => {
+          console.error('Projects API error:', e);
+          return { projects: [] };
+        }),
+        callAdminAPI<{ items: InboxItem[] }>('/inbox').catch((e) => {
+          console.error('Inbox API error:', e);
+          return { items: [] };
+        }),
+        callAdminAPI<{ ideas: Idea[] }>('/ideas').catch((e) => {
+          console.error('Ideas API error:', e);
+          return { ideas: [] };
+        }),
       ]);
 
       const tasks = tasksRes.tasks || [];
