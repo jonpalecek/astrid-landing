@@ -130,10 +130,10 @@ export default function ChatWidget({
           minProtocol: 3,
           maxProtocol: 3,
           client: {
-            id: 'astrid-web',
+            id: 'webchat',
             version: '1.0.0',
             platform: 'web',
-            mode: 'operator'
+            mode: 'webchat'
           },
           role: 'operator',
           scopes: ['operator.read', 'operator.write'],
