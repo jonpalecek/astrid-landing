@@ -19,11 +19,15 @@ import {
   File,
   Loader2,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  BookOpen
 } from 'lucide-react';
 
+// Knowledge Base root - users only see this folder
+const KNOWLEDGE_BASE_ROOT = '~/knowledge';
+
 export default function FilesPage() {
-  const [currentPath, setCurrentPath] = useState('~');
+  const [currentPath, setCurrentPath] = useState(KNOWLEDGE_BASE_ROOT);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
@@ -52,18 +56,30 @@ export default function FilesPage() {
   };
 
   const navigateUp = () => {
-    if (currentPath === '~') return;
+    // Don't navigate above knowledge base root
+    if (currentPath === KNOWLEDGE_BASE_ROOT) return;
     const parts = currentPath.split('/');
     parts.pop();
-    setCurrentPath(parts.join('/') || '~');
+    const newPath = parts.join('/');
+    // Ensure we don't go above knowledge base
+    if (!newPath.startsWith(KNOWLEDGE_BASE_ROOT)) {
+      setCurrentPath(KNOWLEDGE_BASE_ROOT);
+    } else {
+      setCurrentPath(newPath);
+    }
     setSelectedFilePath(null);
   };
 
   const navigateToPath = (index: number) => {
-    if (index === 0) {
-      setCurrentPath('~');
+    // Build path from knowledge base root
+    const kbParts = KNOWLEDGE_BASE_ROOT.split('/');
+    const relativeParts = pathParts.slice(kbParts.length);
+    
+    if (index < kbParts.length) {
+      setCurrentPath(KNOWLEDGE_BASE_ROOT);
     } else {
-      const newPath = '~/' + pathParts.slice(1, index + 1).join('/');
+      const relativeIndex = index - kbParts.length;
+      const newPath = KNOWLEDGE_BASE_ROOT + '/' + relativeParts.slice(0, relativeIndex + 1).join('/');
       setCurrentPath(newPath);
     }
     setSelectedFilePath(null);
@@ -306,8 +322,11 @@ export default function FilesPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Files</h1>
-              <p className="text-slate-500">Browse your workspace</p>
+              <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                <BookOpen className="w-6 h-6 text-amber-500" />
+                Knowledge Base
+              </h1>
+              <p className="text-slate-500">Documents your assistant can search and reference</p>
             </div>
             <div className="flex gap-2">
               <button
@@ -346,19 +365,27 @@ export default function FilesPage() {
 
           {/* Breadcrumb */}
           <div className="flex items-center gap-1 text-sm">
-            {pathParts.map((part, index) => (
-              <div key={index} className="flex items-center">
-                {index > 0 && <ChevronRight className="w-4 h-4 text-slate-300 mx-1" />}
-                <button
-                  onClick={() => navigateToPath(index)}
-                  className={`hover:text-amber-600 transition-colors ${
-                    index === pathParts.length - 1 ? 'text-slate-900 font-medium' : 'text-slate-500'
-                  }`}
-                >
-                  {part === '~' ? 'Home' : part}
-                </button>
-              </div>
-            ))}
+            {pathParts.map((part, index) => {
+              // Skip the ~ and knowledge parts, show "Knowledge Base" as root
+              if (part === '~') return null;
+              const isKnowledgeRoot = part === 'knowledge' && index === 1;
+              const displayName = isKnowledgeRoot ? 'Knowledge Base' : part;
+              const isLast = index === pathParts.length - 1;
+              
+              return (
+                <div key={index} className="flex items-center">
+                  {index > 1 && <ChevronRight className="w-4 h-4 text-slate-300 mx-1" />}
+                  <button
+                    onClick={() => navigateToPath(index)}
+                    className={`hover:text-amber-600 transition-colors ${
+                      isLast ? 'text-slate-900 font-medium' : 'text-slate-500'
+                    }`}
+                  >
+                    {displayName}
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
           {/* Error State */}
@@ -379,8 +406,8 @@ export default function FilesPage() {
           {/* File List */}
           {!isLoading && (
             <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-              {/* Back button if not at root */}
-              {currentPath !== '~' && (
+              {/* Back button if not at knowledge base root */}
+              {currentPath !== KNOWLEDGE_BASE_ROOT && (
                 <button
                   onClick={navigateUp}
                   className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors text-left"
@@ -448,6 +475,18 @@ export default function FilesPage() {
                 <div className="p-8 text-center text-slate-500">
                   {searchQuery ? (
                     <p>No files or folders match "{searchQuery}"</p>
+                  ) : currentPath === KNOWLEDGE_BASE_ROOT ? (
+                    <>
+                      <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                      <p className="font-medium text-slate-700 mb-1">Your Knowledge Base is empty</p>
+                      <p className="text-sm mb-4">Add documents here that you want your assistant to know about.</p>
+                      <button 
+                        onClick={() => setShowNewFileModal(true)}
+                        className="text-amber-600 hover:text-amber-700 font-medium"
+                      >
+                        Create your first document
+                      </button>
+                    </>
                   ) : (
                     <>
                       <File className="w-12 h-12 text-slate-300 mx-auto mb-3" />
