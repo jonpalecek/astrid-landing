@@ -100,30 +100,28 @@ export default async function DashboardPage() {
 
   if (isActive) {
     try {
-      // Fetch all workspace data in parallel from Admin Agent
-      const [tasksRes, projectsRes, inboxRes, ideasRes] = await Promise.all([
-        callAdminAPI<{ tasks: Task[] }>('/tasks').catch((e) => {
-          console.error('Tasks API error:', e);
-          return { tasks: [] };
-        }),
-        callAdminAPI<{ projects: Project[] }>('/projects').catch((e) => {
-          console.error('Projects API error:', e);
-          return { projects: [] };
-        }),
-        callAdminAPI<{ items: InboxItem[] }>('/inbox').catch((e) => {
-          console.error('Inbox API error:', e);
-          return { items: [] };
-        }),
-        callAdminAPI<{ ideas: Idea[] }>('/ideas').catch((e) => {
-          console.error('Ideas API error:', e);
-          return { ideas: [] };
-        }),
+      // Fetch tasks first to surface any auth errors
+      const tasksRes = await callAdminAPI<{ tasks: Task[] }>('/tasks');
+      
+      // Fetch remaining data in parallel (fail silently for these)
+      const [projectsRes, inboxRes, ideasRes] = await Promise.all([
+        callAdminAPI<{ projects: Project[] }>('/projects').catch(() => ({ projects: [] })),
+        callAdminAPI<{ items: InboxItem[] }>('/inbox').catch(() => ({ items: [] })),
+        callAdminAPI<{ ideas: Idea[] }>('/ideas').catch(() => ({ ideas: [] })),
       ]);
 
       const tasks = tasksRes.tasks || [];
       const projects = projectsRes.projects || [];
       const inbox = inboxRes.items || [];
       const ideas = ideasRes.ideas || [];
+
+      // Debug: log what we got
+      console.log('[Dashboard] Data received:', {
+        tasks: tasks.length,
+        projects: projects.length,
+        inbox: inbox.length,
+        ideas: ideas.length,
+      });
 
       // Calculate stats
       const doneTasks = tasks.filter(t => t.done);
@@ -141,12 +139,11 @@ export default async function DashboardPage() {
         recentIdeas: ideas.slice(0, 5),
       };
     } catch (e) {
+      console.error('[Dashboard] Main error:', e);
       if (e instanceof AdminAPIError) {
-        workspaceError = e.code === 'CONNECTION_ERROR' 
-          ? 'Unable to reach your assistant. Is it running?'
-          : e.message;
+        workspaceError = `[${e.code}] ${e.message}`;
       } else {
-        workspaceError = 'Unable to load workspace data';
+        workspaceError = `Error: ${e instanceof Error ? e.message : 'Unknown'}`;
       }
     }
   }
