@@ -53,6 +53,64 @@ export function useTasks() {
     swrConfig
   );
 
+  // Toggle task done status
+  const toggleTask = async (taskId: string, done: boolean) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      tasks: data.tasks.map(t => t.id === taskId ? { ...t, done } : t)
+    } : undefined;
+    
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/tasks/${taskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ done }),
+        });
+        if (!res.ok) throw new Error('Failed to update task');
+        return fetcher('/api/vm/tasks');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
+  // Add a new task
+  const addTask = async (task: { title: string; section?: string; due?: string; priority?: string }) => {
+    await mutate(
+      async () => {
+        const res = await fetch('/api/vm/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(task),
+        });
+        if (!res.ok) throw new Error('Failed to add task');
+        return fetcher('/api/vm/tasks');
+      },
+      { revalidate: true }
+    );
+  };
+
+  // Delete a task
+  const deleteTask = async (taskId: string) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      tasks: data.tasks.filter(t => t.id !== taskId)
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/tasks/${taskId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete task');
+        return fetcher('/api/vm/tasks');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
   return {
     tasks: data?.tasks || [],
     sections: data?.sections || { today: [], thisWeek: [], later: [], done: [] },
@@ -60,6 +118,9 @@ export function useTasks() {
     isError: !!error,
     error: error?.message,
     refresh: mutate,
+    toggleTask,
+    addTask,
+    deleteTask,
   };
 }
 
@@ -91,12 +152,73 @@ export function useProjects() {
     swrConfig
   );
 
+  // Add a new project
+  const addProject = async (project: { name: string; description?: string; status?: string }) => {
+    await mutate(
+      async () => {
+        const res = await fetch('/api/vm/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(project),
+        });
+        if (!res.ok) throw new Error('Failed to add project');
+        return fetcher('/api/vm/projects');
+      },
+      { revalidate: true }
+    );
+  };
+
+  // Update project status
+  const updateStatus = async (projectId: string, status: string) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      projects: data.projects.map(p => p.id === projectId ? { ...p, status } : p)
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/projects/${projectId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status }),
+        });
+        if (!res.ok) throw new Error('Failed to update project');
+        return fetcher('/api/vm/projects');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
+  // Delete a project
+  const deleteProject = async (projectId: string) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      projects: data.projects.filter(p => p.id !== projectId)
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/projects/${projectId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete project');
+        return fetcher('/api/vm/projects');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
   return {
     projects: data?.projects || [],
     isLoading,
     isError: !!error,
     error: error?.message,
     refresh: mutate,
+    addProject,
+    updateStatus,
+    deleteProject,
   };
 }
 
@@ -119,12 +241,50 @@ export function useIdeas() {
     swrConfig
   );
 
+  // Add a new idea
+  const addIdea = async (idea: { title: string; content?: string; category?: string }) => {
+    await mutate(
+      async () => {
+        const res = await fetch('/api/vm/ideas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(idea),
+        });
+        if (!res.ok) throw new Error('Failed to add idea');
+        return fetcher('/api/vm/ideas');
+      },
+      { revalidate: true }
+    );
+  };
+
+  // Delete an idea
+  const deleteIdea = async (ideaId: string) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      ideas: data.ideas.filter(i => i.id !== ideaId)
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/ideas/${ideaId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete idea');
+        return fetcher('/api/vm/ideas');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
   return {
     ideas: data?.ideas || [],
     isLoading,
     isError: !!error,
     error: error?.message,
     refresh: mutate,
+    addIdea,
+    deleteIdea,
   };
 }
 
@@ -147,12 +307,67 @@ export function useInbox() {
     swrConfig
   );
 
+  // Add an inbox item
+  const addItem = async (content: string) => {
+    await mutate(
+      async () => {
+        const res = await fetch('/api/vm/inbox', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        });
+        if (!res.ok) throw new Error('Failed to add item');
+        return fetcher('/api/vm/inbox');
+      },
+      { revalidate: true }
+    );
+  };
+
+  // Delete an inbox item
+  const deleteItem = async (itemId: string) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      items: data.items.filter(i => i.id !== itemId)
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/inbox/${itemId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete item');
+        return fetcher('/api/vm/inbox');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
+  // Process inbox item to task
+  const processToTask = async (itemId: string, section: string = 'today') => {
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/inbox/${itemId}/process`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'to-task', section }),
+        });
+        if (!res.ok) throw new Error('Failed to process item');
+        return fetcher('/api/vm/inbox');
+      },
+      { revalidate: true }
+    );
+  };
+
   return {
     items: data?.items || [],
     isLoading,
     isError: !!error,
     error: error?.message,
     refresh: mutate,
+    addItem,
+    deleteItem,
+    processToTask,
   };
 }
 

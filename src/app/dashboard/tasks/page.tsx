@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useTasks, Task } from '@/hooks/use-workspace';
 import { 
   CheckCircle2, 
@@ -8,11 +9,16 @@ import {
   AlertCircle,
   AlertTriangle,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Plus,
+  Trash2,
+  X
 } from 'lucide-react';
 
 export default function TasksPage() {
-  const { tasks, sections, isLoading, isError, error, refresh } = useTasks();
+  const { tasks, sections, isLoading, isError, error, refresh, toggleTask, addTask, deleteTask } = useTasks();
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Group tasks by section
   const tasksBySection = {
@@ -25,6 +31,51 @@ export default function TasksPage() {
   const pendingCount = tasksBySection.today.length + tasksBySection.thisWeek.length;
   const overdueCount = tasks.filter(t => !t.done && t.due && new Date(t.due) < new Date()).length;
 
+  const handleToggle = async (task: Task) => {
+    try {
+      await toggleTask(task.id, !task.done);
+    } catch (err) {
+      console.error('Failed to toggle task:', err);
+    }
+  };
+
+  const handleDelete = async (taskId: string) => {
+    if (!confirm('Delete this task?')) return;
+    try {
+      await deleteTask(taskId);
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+    }
+  };
+
+  const handleAddTask = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const title = formData.get('title') as string;
+    const section = formData.get('section') as string;
+    const due = formData.get('due') as string;
+    const priority = formData.get('priority') as string;
+
+    try {
+      await addTask({ 
+        title, 
+        section: section || 'today',
+        due: due || undefined,
+        priority: priority || 'normal'
+      });
+      setShowAddModal(false);
+      form.reset();
+    } catch (err) {
+      console.error('Failed to add task:', err);
+      alert('Failed to add task');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -33,13 +84,22 @@ export default function TasksPage() {
           <h1 className="text-2xl font-bold text-slate-900">Tasks</h1>
           <p className="text-slate-500">Your standalone tasks</p>
         </div>
-        <button
-          onClick={() => refresh()}
-          className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
-          title="Refresh"
-        >
-          <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Task
+          </button>
+          <button
+            onClick={() => refresh()}
+            className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -78,9 +138,16 @@ export default function TasksPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
           <CheckCircle2 className="w-12 h-12 mx-auto mb-4 text-slate-300" />
           <h2 className="text-xl font-semibold text-slate-900 mb-2">No tasks yet</h2>
-          <p className="text-slate-500">
-            Ask your assistant to add tasks for you!
+          <p className="text-slate-500 mb-4">
+            Get started by adding your first task!
           </p>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Task
+          </button>
         </div>
       )}
 
@@ -89,7 +156,9 @@ export default function TasksPage() {
         <TaskSection 
           title="Today" 
           icon={<AlertTriangle className="w-4 h-4 text-red-500" />}
-          tasks={tasksBySection.today} 
+          tasks={tasksBySection.today}
+          onToggle={handleToggle}
+          onDelete={handleDelete}
         />
       )}
 
@@ -97,7 +166,9 @@ export default function TasksPage() {
         <TaskSection 
           title="This Week" 
           icon={<Clock className="w-4 h-4 text-amber-500" />}
-          tasks={tasksBySection.thisWeek} 
+          tasks={tasksBySection.thisWeek}
+          onToggle={handleToggle}
+          onDelete={handleDelete}
         />
       )}
 
@@ -105,7 +176,9 @@ export default function TasksPage() {
         <TaskSection 
           title="Later" 
           icon={<Circle className="w-4 h-4 text-slate-400" />}
-          tasks={tasksBySection.later} 
+          tasks={tasksBySection.later}
+          onToggle={handleToggle}
+          onDelete={handleDelete}
         />
       )}
 
@@ -113,14 +186,115 @@ export default function TasksPage() {
         <TaskSection 
           title="Done" 
           icon={<CheckCircle2 className="w-4 h-4 text-green-500" />}
-          tasks={tasksBySection.done} 
+          tasks={tasksBySection.done}
+          onToggle={handleToggle}
+          onDelete={handleDelete}
         />
+      )}
+
+      {/* Add Task Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-900">Add Task</h2>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddTask} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Task title *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  required
+                  autoFocus
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  placeholder="What needs to be done?"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Section
+                  </label>
+                  <select
+                    name="section"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  >
+                    <option value="today">Today</option>
+                    <option value="thisWeek">This Week</option>
+                    <option value="later">Later</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Priority
+                  </label>
+                  <select
+                    name="priority"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  >
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Due date (optional)
+                </label>
+                <input
+                  type="date"
+                  name="due"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  Add Task
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-function TaskSection({ title, icon, tasks }: { title: string; icon: React.ReactNode; tasks: Task[] }) {
+interface TaskSectionProps {
+  title: string;
+  icon: React.ReactNode;
+  tasks: Task[];
+  onToggle: (task: Task) => void;
+  onDelete: (taskId: string) => void;
+}
+
+function TaskSection({ title, icon, tasks, onToggle, onDelete }: TaskSectionProps) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3 text-sm font-medium text-slate-600">
@@ -130,27 +304,44 @@ function TaskSection({ title, icon, tasks }: { title: string; icon: React.ReactN
       
       <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
         {tasks.map((task) => (
-          <TaskRow key={task.id} task={task} />
+          <TaskRow 
+            key={task.id} 
+            task={task} 
+            onToggle={onToggle}
+            onDelete={onDelete}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function TaskRow({ task }: { task: Task }) {
+interface TaskRowProps {
+  task: Task;
+  onToggle: (task: Task) => void;
+  onDelete: (taskId: string) => void;
+}
+
+function TaskRow({ task, onToggle, onDelete }: TaskRowProps) {
   const isOverdue = !task.done && task.due && new Date(task.due) < new Date();
   
   return (
-    <div className="flex items-center gap-3 p-4">
-      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-        task.done 
-          ? 'bg-green-100 border-green-500 text-green-600' 
-          : 'border-slate-300'
-      }`}>
+    <div className="flex items-center gap-3 p-4 group">
+      <button
+        onClick={() => onToggle(task)}
+        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+          task.done 
+            ? 'bg-green-100 border-green-500 text-green-600 hover:bg-green-200' 
+            : 'border-slate-300 hover:border-amber-500 hover:bg-amber-50'
+        }`}
+      >
         {task.done && <CheckCircle2 className="w-3 h-3" />}
-      </span>
+      </button>
       
-      <span className={`flex-1 ${task.done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+      <span 
+        className={`flex-1 cursor-pointer ${task.done ? 'text-slate-400 line-through' : 'text-slate-800'}`}
+        onClick={() => onToggle(task)}
+      >
         {task.title}
       </span>
       
@@ -170,6 +361,14 @@ function TaskRow({ task }: { task: Task }) {
           {task.priority}
         </span>
       )}
+
+      <button
+        onClick={() => onDelete(task.id)}
+        className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+        title="Delete task"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
     </div>
   );
 }
