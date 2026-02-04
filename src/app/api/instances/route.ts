@@ -4,54 +4,9 @@ import { createDroplet, getDroplet } from '@/lib/digitalocean';
 import { createTunnel, deleteTunnel } from '@/lib/cloudflare';
 import crypto from 'crypto';
 
-// Send welcome message to new user via OpenClaw webhook
-async function sendWelcomeMessage(tunnelHostname: string, gatewayToken: string, assistantName: string, telegramUserId?: string): Promise<boolean> {
-  try {
-    const webhookUrl = `${tunnelHostname}/hooks/agent`;
-    
-    const welcomePrompt = `This is your FIRST message to your new user! They just finished setting you up and are excited to meet you. Make this moment special.
-
-You are ${assistantName}, their personal AI executive assistant. You're not just a chatbot — you're here to make them superhuman.
-
-Write a warm, enthusiastic welcome message that:
-- Greets them with genuine excitement (you've been waiting to meet them!)
-- Introduces yourself as ${assistantName}, their personal executive assistant
-- Conveys that you're here to take the mental load off their shoulders — you'll remember everything, think ahead, and make sure nothing falls through the cracks
-- Emphasize that you don't just help them plan — you can actually DO things for them. They can offload tasks to you and you'll handle them.
-- Mention you'll keep everything organized (projects, tasks, ideas) but frame it naturally, not as a feature list
-- Let them know they can message you anytime — you're always here, always ready
-- Ask what's on their mind or what they'd like to tackle together
-
-Tone: Warm, confident, slightly playful. Like a brilliant friend who just joined their team and is ready to roll up their sleeves.
-Length: 3-4 short paragraphs max. Don't use bullet points or feature lists — this should feel personal, not like a product tour.
-DO NOT mention: markdown, files, workspaces, technical details, or implementation specifics.`;
-
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${gatewayToken}`,
-      },
-      body: JSON.stringify({
-        message: welcomePrompt,
-        name: 'Welcome',
-        deliver: true,
-        channel: 'telegram',
-        to: telegramUserId, // Target user for message delivery
-      }),
-    });
-
-    if (!response.ok) {
-      console.error('Failed to send welcome message:', await response.text());
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Error sending welcome message:', error);
-    return false;
-  }
-}
+// Welcome message is now handled via SOUL.md "First Contact" instructions
+// When user sends their first message, the assistant sees empty history + SOUL.md
+// and delivers a warm, personalized welcome naturally.
 
 // Generate a secure random token for gateway auth
 function generateGatewayToken(): string {
@@ -293,9 +248,6 @@ export async function GET() {
             }
           }
 
-          // Check if this is the first time going active (welcome not sent yet)
-          const shouldSendWelcome = !instance.welcome_sent;
-
           await supabase
             .from('instances')
             .update({
@@ -305,24 +257,15 @@ export async function GET() {
               health_status: 'healthy',
               last_health_check: new Date().toISOString(),
               provisioned_at: instance.provisioned_at || new Date().toISOString(),
-              welcome_sent: true, // Mark welcome as sent (we'll send it below)
             })
             .eq('id', instance.id);
 
           instance.status = 'active';
           instance.health_status = 'healthy';
           instance.droplet_ip = dropletIp;
-
-          // Send welcome message on first activation
-          if (shouldSendWelcome && instance.tunnel_hostname && instance.gateway_token) {
-            // Fire and forget - don't block the response
-            sendWelcomeMessage(
-              instance.tunnel_hostname,
-              instance.gateway_token,
-              instance.assistant_name || 'Astrid',
-              instance.telegram_user_id || undefined
-            ).catch(e => console.error('Welcome message failed:', e));
-          }
+          
+          // Welcome message is handled by SOUL.md "First Contact" instructions
+          // when the user sends their first message to the bot
         }
       } catch (e) {
         console.error('Failed to check tunnel status:', e);
