@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useFiles, useFileContent, FileItem } from '@/hooks/use-workspace';
 import { 
   Plus, 
@@ -20,14 +20,35 @@ import {
   Loader2,
   RefreshCw,
   AlertCircle,
-  BookOpen
+  Upload,
+  Download,
+  FolderOpen,
+  Archive,
+  FileUp,
+  FileDown
 } from 'lucide-react';
 
-// User files root
-const USER_FILES_ROOT = '~/user/files';
+// Folder descriptions for the root level
+const FOLDER_INFO: Record<string, { icon: React.ReactNode; description: string; color: string }> = {
+  'downloads': { 
+    icon: <FileDown className="w-5 h-5" />, 
+    description: 'Files your assistant downloads for you',
+    color: 'text-blue-500'
+  },
+  'uploads': { 
+    icon: <FileUp className="w-5 h-5" />, 
+    description: 'Files you share with your assistant',
+    color: 'text-green-500'
+  },
+  'projects': { 
+    icon: <FolderOpen className="w-5 h-5" />, 
+    description: 'Project documentation maintained by your assistant',
+    color: 'text-amber-500'
+  },
+};
 
 export default function FilesPage() {
-  const [currentPath, setCurrentPath] = useState(USER_FILES_ROOT);
+  const [currentPath, setCurrentPath] = useState('~');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
@@ -36,8 +57,12 @@ export default function FilesPage() {
   const [showNewFileModal, setShowNewFileModal] = useState(false);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const { folders, files, isLoading, isError, error, refresh } = useFiles(currentPath);
+  // Use userView=true at root level to filter to user folders
+  const isRoot = currentPath === '~';
+  const { folders, files, isLoading, isError, error, refresh } = useFiles(currentPath, isRoot);
   const { file: selectedFile, content: fileContent, isLoading: fileLoading, refresh: refreshFile } = useFileContent(selectedFilePath);
   
   // Update edit content when file loads
@@ -56,29 +81,18 @@ export default function FilesPage() {
   };
 
   const navigateUp = () => {
-    // Don't navigate above files root
-    if (currentPath === USER_FILES_ROOT) return;
+    if (currentPath === '~') return;
     const parts = currentPath.split('/');
     parts.pop();
-    const newPath = parts.join('/');
-    // Ensure we don't go above files root
-    if (!newPath.startsWith(USER_FILES_ROOT)) {
-      setCurrentPath(USER_FILES_ROOT);
-    } else {
-      setCurrentPath(newPath);
-    }
+    const newPath = parts.join('/') || '~';
+    setCurrentPath(newPath);
     setSelectedFilePath(null);
   };
 
   const navigateToPath = (index: number) => {
-    // Build path from files root (~/user/files = 3 parts)
-    const rootParts = USER_FILES_ROOT.split('/');
-    
-    if (index <= 2) {
-      // Clicked on Files root or above
-      setCurrentPath(USER_FILES_ROOT);
+    if (index === 0) {
+      setCurrentPath('~');
     } else {
-      // Build path to the clicked index
       const newPath = pathParts.slice(0, index + 1).join('/');
       setCurrentPath(newPath);
     }
@@ -153,10 +167,81 @@ export default function FilesPage() {
     }
   };
 
-  // Filter files/folders based on search
-  const filteredFolders = folders.filter(f => 
-    f.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const downloadFile = async (file: FileItem) => {
+    const filePath = currentPath === '~' ? `~/${file.name}` : `${currentPath}/${file.name}`;
+    const url = `/api/vm/files/download?path=${encodeURIComponent(filePath)}`;
+    
+    // Open in new tab to trigger download
+    window.open(url, '_blank');
+  };
+
+  // Upload handling
+  const handleUpload = useCallback(async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    
+    // Determine upload path (use uploads/ if at root, otherwise current path)
+    const uploadPath = isRoot ? '~/uploads' : currentPath;
+    
+    setUploading(true);
+    try {
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const res = await fetch(`/api/vm/files/upload?path=${encodeURIComponent(uploadPath)}`, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || `Failed to upload ${file.name}`);
+        }
+      }
+      
+      // Refresh the appropriate directory
+      if (isRoot) {
+        // If we uploaded to uploads/ from root, navigate there
+        setCurrentPath('~/uploads');
+      }
+      refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to upload file');
+    } finally {
+      setUploading(false);
+    }
+  }, [currentPath, isRoot, refresh]);
+
+  // Drag and drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    handleUpload(e.dataTransfer.files);
+  }, [handleUpload]);
+
+  // Filter files/folders based on search, sort archive to bottom
+  const filteredFolders = folders
+    .filter(f => f.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      // Archive always goes last
+      if (a === 'archive') return 1;
+      if (b === 'archive') return -1;
+      return a.localeCompare(b);
+    });
   const filteredFiles = files.filter(f => 
     f.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -212,8 +297,27 @@ export default function FilesPage() {
       });
   };
 
+  // Check if we're in the uploads folder (to show upload UI prominently)
+  const isInUploads = currentPath.startsWith('~/uploads');
+
   return (
-    <div className="h-[calc(100vh-12rem)]">
+    <div 
+      className="h-[calc(100vh-12rem)]"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="fixed inset-0 bg-amber-500/20 z-50 flex items-center justify-center pointer-events-none">
+          <div className="bg-white rounded-xl p-8 shadow-lg border-2 border-amber-500 border-dashed">
+            <Upload className="w-12 h-12 text-amber-500 mx-auto mb-3" />
+            <p className="text-lg font-medium text-slate-900">Drop files to upload</p>
+            <p className="text-sm text-slate-500">Files will be saved to {isRoot ? 'uploads/' : currentPath.replace('~/', '')}</p>
+          </div>
+        </div>
+      )}
+
       {selectedFilePath ? (
         // File Editor View
         <div className="h-full flex flex-col">
@@ -336,18 +440,34 @@ export default function FilesPage() {
               >
                 <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
               </button>
-              <button 
-                onClick={() => setShowNewFolderModal(true)}
-                className="inline-flex items-center gap-1 px-3 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                <FolderPlus className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={() => setShowNewFileModal(true)}
-                className="inline-flex items-center gap-1 px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
-              >
-                <Plus className="w-4 h-4" /> New File
-              </button>
+              {/* Upload button */}
+              <label className="inline-flex items-center gap-1 px-3 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
+                <Upload className="w-4 h-4" />
+                <span className="hidden sm:inline">Upload</span>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => handleUpload(e.target.files)}
+                  className="hidden"
+                  disabled={uploading}
+                />
+              </label>
+              {!isRoot && (
+                <>
+                  <button 
+                    onClick={() => setShowNewFolderModal(true)}
+                    className="inline-flex items-center gap-1 px-3 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    <FolderPlus className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => setShowNewFileModal(true)}
+                    className="inline-flex items-center gap-1 px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" /> New File
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -366,15 +486,12 @@ export default function FilesPage() {
           {/* Breadcrumb */}
           <div className="flex items-center gap-1 text-sm">
             {pathParts.map((part, index) => {
-              // Skip ~/user, show "Files" as root for ~/user/files
-              if (part === '~' || part === 'user') return null;
-              const isFilesRoot = part === 'files' && index === 2;
-              const displayName = isFilesRoot ? 'Files' : part;
+              const displayName = part === '~' ? 'Files' : part;
               const isLast = index === pathParts.length - 1;
               
               return (
                 <div key={index} className="flex items-center">
-                  {index > 2 && <ChevronRight className="w-4 h-4 text-slate-300 mx-1" />}
+                  {index > 0 && <ChevronRight className="w-4 h-4 text-slate-300 mx-1" />}
                   <button
                     onClick={() => navigateToPath(index)}
                     className={`hover:text-amber-600 transition-colors ${
@@ -387,6 +504,14 @@ export default function FilesPage() {
               );
             })}
           </div>
+
+          {/* Upload indicator */}
+          {uploading && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+              <Loader2 className="w-5 h-5 text-amber-500 animate-spin shrink-0" />
+              <p className="text-sm text-amber-700">Uploading files...</p>
+            </div>
+          )}
 
           {/* Error State */}
           {isError && (
@@ -406,8 +531,8 @@ export default function FilesPage() {
           {/* File List */}
           {!isLoading && (
             <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-              {/* Back button if not at knowledge base root */}
-              {currentPath !== USER_FILES_ROOT && (
+              {/* Back button if not at root */}
+              {!isRoot && (
                 <button
                   onClick={navigateUp}
                   className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors text-left"
@@ -418,19 +543,34 @@ export default function FilesPage() {
               )}
 
               {/* Folders */}
-              {filteredFolders.map((folder) => (
-                <button
-                  key={folder}
-                  onClick={() => navigateToFolder(folder)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors text-left group"
-                >
-                  <div className="flex items-center gap-3">
-                    <Folder className="w-5 h-5 text-amber-500" />
-                    <span className="font-medium text-slate-900">{folder}/</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500" />
-                </button>
-              ))}
+              {filteredFolders.map((folder) => {
+                const info = isRoot ? FOLDER_INFO[folder] : null;
+                
+                return (
+                  <button
+                    key={folder}
+                    onClick={() => navigateToFolder(folder)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors text-left group"
+                  >
+                    <div className="flex items-center gap-3">
+                      {info ? (
+                        <span className={info.color}>{info.icon}</span>
+                      ) : folder === 'archive' ? (
+                        <Archive className="w-5 h-5 text-slate-400" />
+                      ) : (
+                        <Folder className="w-5 h-5 text-amber-500" />
+                      )}
+                      <div>
+                        <span className="font-medium text-slate-900">{folder}</span>
+                        {info && (
+                          <p className="text-xs text-slate-500">{info.description}</p>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500" />
+                  </button>
+                );
+              })}
               
               {/* Files */}
               {filteredFiles.map((file) => {
@@ -454,6 +594,13 @@ export default function FilesPage() {
                     </button>
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
+                        onClick={() => downloadFile(file)}
+                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Download"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <button 
                         onClick={() => openFile(file)}
                         className="px-3 py-1 text-sm text-amber-600 hover:bg-amber-50 rounded transition-colors"
                       >
@@ -474,7 +621,23 @@ export default function FilesPage() {
               {filteredFolders.length === 0 && filteredFiles.length === 0 && (
                 <div className="p-8 text-center text-slate-500">
                   {searchQuery ? (
-                    <p>No files or folders match "{searchQuery}"</p>
+                    <p>No files or folders match &ldquo;{searchQuery}&rdquo;</p>
+                  ) : isInUploads ? (
+                    <>
+                      <Upload className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                      <p className="font-medium text-slate-700 mb-1">No uploads yet</p>
+                      <p className="text-sm mb-4">Drag files here or click Upload to share files with your assistant.</p>
+                      <label className="inline-flex items-center gap-2 text-amber-600 hover:text-amber-700 font-medium cursor-pointer">
+                        <Upload className="w-4 h-4" />
+                        Upload files
+                        <input
+                          type="file"
+                          multiple
+                          onChange={(e) => handleUpload(e.target.files)}
+                          className="hidden"
+                        />
+                      </label>
+                    </>
                   ) : (
                     <>
                       <File className="w-12 h-12 text-slate-300 mx-auto mb-3" />

@@ -192,9 +192,11 @@ export interface FileContentResponse {
   modified: string;
 }
 
-export function useFiles(path: string) {
+export function useFiles(path: string, userView: boolean = false) {
+  const url = `/api/vm/files?path=${encodeURIComponent(path)}${userView ? '&userView=true' : ''}`;
+  
   const { data, error, isLoading, mutate } = useSWR<DirectoryResponse>(
-    `/api/vm/files?path=${encodeURIComponent(path)}`,
+    url,
     fetcher,
     swrConfig
   );

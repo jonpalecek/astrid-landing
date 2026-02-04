@@ -27,7 +27,7 @@ function generateTunnelSecret(): string {
 export async function createTunnel(instanceId: string): Promise<CreateTunnelResult> {
   const token = process.env.CF_API_TOKEN;
   const accountId = process.env.CF_ACCOUNT_ID;
-  const tunnelDomain = process.env.CF_TUNNEL_DOMAIN || 'tunnel.getastrid.ai';
+  const tunnelDomain = process.env.CF_TUNNEL_DOMAIN || 'getastrid.ai';
 
   if (!token || !accountId) {
     throw new Error('Cloudflare credentials not configured');

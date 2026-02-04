@@ -7,11 +7,12 @@
 import { callAdminAPI, apiResponse, apiError } from '@/lib/admin-api';
 import { NextRequest } from 'next/server';
 
-// GET /api/vm/files?path=~ - List directory
+// GET /api/vm/files?path=~&userView=true - List directory
 export async function GET(req: NextRequest) {
   try {
     const path = req.nextUrl.searchParams.get('path') || '~';
-    const data = await callAdminAPI(`/files?path=${encodeURIComponent(path)}`);
+    const userView = req.nextUrl.searchParams.get('userView') || 'false';
+    const data = await callAdminAPI(`/files?path=${encodeURIComponent(path)}&userView=${userView}`);
     return apiResponse(data);
   } catch (error) {
     return apiError(error);

@@ -75,6 +75,9 @@ function generateCloudInit(options: DropletCreateOptions): string {
   // Determine the Anthropic key to use (trim any whitespace)
   const anthropicApiKey = (anthropicKey || setupToken || '').trim();
 
+  // GitHub Packages token for installing @getastridai/* packages
+  const githubPackagesToken = process.env.GITHUB_PACKAGES_TOKEN || '';
+
   // Build the openclaw config with correct schema
   const openclawConfig: Record<string, unknown> = {
     gateway: {
@@ -255,11 +258,14 @@ cat > /home/openclaw/.cloudflared/credentials.json << 'TUNNELEOF'
 ${tunnelCredentialsJson}
 TUNNELEOF
 
-# Write tunnel config
+# Write tunnel config (routes Admin Agent + Gateway)
 cat > /home/openclaw/.cloudflared/config.yml << 'CONFIGYMLEOF'
 tunnel: ${JSON.parse(tunnelCredentialsJson).TunnelID}
 credentials-file: /home/openclaw/.cloudflared/credentials.json
 ingress:
+  - hostname: ${tunnelHostname?.replace('https://', '')}
+    path: /api/admin/*
+    service: http://localhost:18790
   - hostname: ${tunnelHostname?.replace('https://', '')}
     service: http://localhost:18789
   - service: http_status:404
@@ -269,6 +275,11 @@ CONFIGYMLEOF
 # Create workspace template files
 mkdir -p /home/openclaw/workspace/memory
 mkdir -p /home/openclaw/workspace/skills/astrid-pm
+
+# Create user-facing folders for Files page
+mkdir -p /home/openclaw/workspace/downloads
+mkdir -p /home/openclaw/workspace/uploads
+mkdir -p /home/openclaw/workspace/projects/archive
 
 # AGENTS.md - Points to the astrid-pm skill
 cat > /home/openclaw/workspace/AGENTS.md << 'AGENTSEOF'
@@ -449,6 +460,49 @@ chown -R openclaw:openclaw /home/openclaw
 echo "Installing OpenClaw..." >> /var/log/openclaw-init.log
 npm install -g openclaw >> /var/log/openclaw-init.log 2>&1
 
+# ============================================
+# Astrid Agents Setup (via GitHub Packages)
+# ============================================
+echo "Setting up Astrid Agents..." >> /var/log/openclaw-init.log
+
+# Configure npm for GitHub Packages (both root and openclaw users)
+cat > /home/openclaw/.npmrc << 'NPMRCEOF'
+@getastridai:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${githubPackagesToken}
+NPMRCEOF
+chown openclaw:openclaw /home/openclaw/.npmrc
+cp /home/openclaw/.npmrc /root/.npmrc
+
+# Install Astrid agents from GitHub Packages
+echo "Installing @getastridai/admin-agent..." >> /var/log/openclaw-init.log
+npm install -g @getastridai/admin-agent >> /var/log/openclaw-init.log 2>&1
+
+echo "Installing @getastridai/skills..." >> /var/log/openclaw-init.log
+npm install -g @getastridai/skills >> /var/log/openclaw-init.log 2>&1
+
+# Note: @getastridai/control-plane will be installed when ready
+# npm install -g @getastridai/control-plane >> /var/log/openclaw-init.log 2>&1
+
+# Create systemd service for Admin Agent (runs astrid-admin binary)
+cat > /etc/systemd/system/astrid-admin.service << 'ADMINSERVICEEOF'
+[Unit]
+Description=Astrid Admin Agent
+After=network.target openclaw.service
+
+[Service]
+Type=simple
+User=openclaw
+ExecStart=/usr/bin/astrid-admin
+Restart=always
+RestartSec=5
+Environment=PORT=18790
+Environment=WORKSPACE_PATH=/home/openclaw/workspace
+Environment=OPENCLAW_CONFIG=/home/openclaw/.openclaw/openclaw.json
+
+[Install]
+WantedBy=multi-user.target
+ADMINSERVICEEOF
+
 # Create systemd service for OpenClaw
 # Note: Use "openclaw gateway --port 18789" not "gateway start"
 cat > /etc/systemd/system/openclaw.service << 'SERVICEEOF'
@@ -498,10 +552,12 @@ SERVICEEOF
 echo "Starting services..." >> /var/log/openclaw-init.log
 systemctl daemon-reload >> /var/log/openclaw-init.log 2>&1
 systemctl enable openclaw >> /var/log/openclaw-init.log 2>&1
+systemctl enable astrid-admin >> /var/log/openclaw-init.log 2>&1
 systemctl enable cloudflared >> /var/log/openclaw-init.log 2>&1
 systemctl start openclaw >> /var/log/openclaw-init.log 2>&1
+systemctl start astrid-admin >> /var/log/openclaw-init.log 2>&1
 
-# Wait for OpenClaw to be ready, then start tunnel
+# Wait for services to be ready, then start tunnel
 sleep 10
 systemctl start cloudflared >> /var/log/openclaw-init.log 2>&1
 
