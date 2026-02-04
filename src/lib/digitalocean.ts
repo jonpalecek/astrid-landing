@@ -671,6 +671,16 @@ export async function createDroplet(options: DropletCreateOptions): Promise<{
 
   const cloudInit = generateCloudInit(options);
 
+  // Build tags for easy identification in DO dashboard
+  // DO tags: lowercase, alphanumeric + hyphens, max 255 chars
+  const sanitizeTag = (s: string) => s.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 50);
+  const tags = [
+    'astrid',
+    'openclaw',
+    `ai-${sanitizeTag(options.assistantName)}`,
+    `user-${sanitizeTag(options.userEmail.split('@')[0])}`,
+  ];
+
   const response = await fetch(`${DO_API_BASE}/droplets`, {
     method: 'POST',
     headers: {
@@ -683,7 +693,7 @@ export async function createDroplet(options: DropletCreateOptions): Promise<{
       size: options.size,
       image: 'ubuntu-24-04-x64',
       user_data: cloudInit,
-      tags: ['astrid', 'openclaw'],
+      tags,
       ssh_keys: process.env.DO_SSH_KEY_ID ? [parseInt(process.env.DO_SSH_KEY_ID)] : [],
     }),
   });
