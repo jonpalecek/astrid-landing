@@ -5,7 +5,7 @@ import { createTunnel, deleteTunnel } from '@/lib/cloudflare';
 import crypto from 'crypto';
 
 // Send welcome message to new user via OpenClaw webhook
-async function sendWelcomeMessage(tunnelHostname: string, gatewayToken: string, assistantName: string): Promise<boolean> {
+async function sendWelcomeMessage(tunnelHostname: string, gatewayToken: string, assistantName: string, telegramUserId?: string): Promise<boolean> {
   try {
     const webhookUrl = `${tunnelHostname}/hooks/agent`;
     
@@ -37,6 +37,7 @@ DO NOT mention: markdown, files, workspaces, technical details, or implementatio
         name: 'Welcome',
         deliver: true,
         channel: 'telegram',
+        to: telegramUserId, // Target user for message delivery
       }),
     });
 
@@ -318,7 +319,8 @@ export async function GET() {
             sendWelcomeMessage(
               instance.tunnel_hostname,
               instance.gateway_token,
-              instance.assistant_name || 'Astrid'
+              instance.assistant_name || 'Astrid',
+              instance.telegram_user_id || undefined
             ).catch(e => console.error('Welcome message failed:', e));
           }
         }
