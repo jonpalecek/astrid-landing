@@ -846,11 +846,14 @@ function LaunchingStep({ config }: { config: any }) {
     let messageIndex = 0;
 
     configuringIntervalRef.current = setInterval(() => {
-      // Increment progress slowly from 70 to 95
-      if (currentProgress < 95) {
-        currentProgress += 5;
-        setProgress(currentProgress);
-      }
+      // Increment progress slowly from 70 to 95 (use functional update to get current value)
+      setProgress(prev => {
+        if (prev < 95) {
+          currentProgress = Math.max(prev + 5, currentProgress);
+          return currentProgress;
+        }
+        return prev;
+      });
       
       // Rotate through messages
       messageIndex = (messageIndex + 1) % configuringMessages.length;
@@ -939,17 +942,17 @@ function LaunchingStep({ config }: { config: any }) {
             
             switch (instance.status) {
               case 'pending':
-                setProgress(20);
+                setProgress(prev => Math.max(prev, 20));
                 setStatusMessage('Creating your private server...');
                 break;
               case 'provisioning':
-                setProgress(40);
+                setProgress(prev => Math.max(prev, 40));
                 setStatusMessage('Server is booting up...');
                 break;
               case 'configuring':
                 setStatus('configuring');
-                setProgress(70);
-                setStatusMessage('Configuring your assistant...');
+                setProgress(prev => Math.max(prev, 70));
+                // Don't override statusMessage - let the configuringInterval handle rotation
                 break;
               case 'active':
                 setStatus('ready');
