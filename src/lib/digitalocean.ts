@@ -119,10 +119,16 @@ function generateCloudInit(options: DropletCreateOptions): string {
     };
   }
 
-  // Add webhook hooks for welcome messages and API access
+  // Add webhook hooks for API access + internal hooks for first-contact welcome
   openclawConfig.hooks = {
     enabled: true,
     token: gatewayToken, // Reuse the gateway auth token for hooks
+    internal: {
+      enabled: true,
+      entries: {
+        "first-contact": { enabled: true }
+      }
+    }
   };
 
   const configJson = JSON.stringify(openclawConfig, null, 2);
@@ -466,6 +472,79 @@ Inbox: "add to inbox [item]", "capture [item]", "process inbox", "show inbox"
 3. Follow formats exactly — the dashboard parses these files
 4. Confirm actions — tell the user what you did
 SKILLEOF
+
+# First-contact hook for warm welcome on first message
+mkdir -p /home/openclaw/workspace/hooks/first-contact
+
+cat > /home/openclaw/workspace/hooks/first-contact/HOOK.md << 'HOOKMDEOF'
+---
+name: first-contact
+description: "Injects warm welcome instructions for first-time users"
+metadata: { "openclaw": { "emoji": "👋", "events": ["agent:bootstrap"] } }
+---
+
+# First Contact Hook
+
+Detects when a user sends their first message and injects welcome instructions
+so the assistant gives a warm, enthusiastic greeting instead of a casual "hey".
+HOOKMDEOF
+
+cat > /home/openclaw/workspace/hooks/first-contact/handler.ts << 'HANDLEREOF'
+const handler = async (event: any) => {
+  if (event.type !== 'agent' || event.action !== 'bootstrap') return;
+
+  const sessionFile = event.context?.sessionFile;
+  let isFirstMessage = false;
+  
+  if (!sessionFile) {
+    isFirstMessage = true;
+  } else {
+    try {
+      const fs = await import('fs');
+      const stats = fs.statSync(sessionFile);
+      isFirstMessage = stats.size < 100;
+    } catch (e) {
+      isFirstMessage = true;
+    }
+  }
+
+  if (!isFirstMessage) return;
+
+  console.log('[first-contact] First message detected! Injecting welcome instructions.');
+
+  const bootstrapFiles = event.context?.bootstrapFiles;
+  if (!bootstrapFiles) return;
+
+  const firstContactInstructions = \`
+## 🚨 FIRST CONTACT ALERT 🚨
+
+THIS IS THE USER'S VERY FIRST MESSAGE TO YOU. They just finished setting you up and are excited to meet you!
+
+**YOUR RESPONSE MUST BE A WARM WELCOME.** Do NOT just say "hey what's up" or give a casual greeting.
+
+Write a 3-4 paragraph welcome that:
+- Greets them with genuine excitement
+- Introduces yourself as their personal executive assistant  
+- Explains you're here to take the mental load off their shoulders
+- Tells them you can DO things, not just plan
+- Asks what they'd like to tackle together
+
+Make it personal and warm. This is a special moment!
+
+---
+
+\`;
+
+  for (const file of bootstrapFiles) {
+    if (file.name === 'SOUL.md') {
+      file.content = firstContactInstructions + file.content;
+      break;
+    }
+  }
+};
+
+export default handler;
+HANDLEREOF
 
 # Set ownership
 chown -R openclaw:openclaw /home/openclaw
