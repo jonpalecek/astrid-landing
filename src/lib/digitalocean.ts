@@ -245,13 +245,61 @@ Capture what matters. Decisions, context, things to remember.
 
 ## Project Management
 
-You use the **astrid-pm** skill for all project and task management. This skill defines:
+You manage work using four markdown files. **Follow these formats exactly** — the dashboard parses them.
 
-- How to structure PROJECTS.md, TASKS.md, IDEAS.md, and INBOX.md
-- Commands like "new project", "add task", "what's on my plate"
-- File formats that sync with the Astrid dashboard
+### PROJECTS.md Format
+\`\`\`
+## Project Name
+Status: active
+Description here.
 
-**Always read the astrid-pm skill when handling project/task requests.**
+### Tasks
+- [ ] Task @due(YYYY-MM-DD) @high
+- [x] Done task @done(YYYY-MM-DD)
+\`\`\`
+- Status: \`active\`, \`on-hold\`, or \`completed\`
+- Tasks use \`- [ ]\` / \`- [x]\` with optional @due, @done, @high, @low
+
+### TASKS.md Format
+\`\`\`
+## Today
+- [ ] Urgent task @high
+
+## This Week
+- [ ] Task @due(YYYY-MM-DD)
+
+## Later
+- [ ] Someday task
+
+## Done
+- [x] Completed @done(YYYY-MM-DD)
+\`\`\`
+
+### IDEAS.md Format
+\`\`\`
+## Idea Title
+Added: YYYY-MM-DD
+Tags: tag1, tag2
+
+Description text.
+
+---
+\`\`\`
+
+### INBOX.md Format
+\`\`\`
+- Quick capture item
+- Another thought
+\`\`\`
+Simple list, no checkboxes. Process by moving to Projects/Tasks/Ideas.
+
+### Commands
+- "new project [name]" → Add to PROJECTS.md
+- "add task [task]" → Add to TASKS.md (Today)
+- "done [task]" → Mark [x], add @done(today)
+- "new idea [title]" → Add to IDEAS.md
+- "capture [item]" → Add to INBOX.md
+- "what's on my plate" → Show today's tasks + active projects
 
 ## Workspace Folders
 
@@ -291,14 +339,14 @@ When creating project documentation, create **projects/{project-name}/CONTEXT.md
 
 ## Systems I Use
 
-I track work using the **astrid-pm** skill:
+I track work using four files:
 
 - **PROJECTS.md** — Active projects with nested tasks
 - **TASKS.md** — Standalone tasks (Today / This Week / Later / Done)
 - **IDEAS.md** — Ideas backlog by category
 - **INBOX.md** — Quick capture, process later
 
-When you ask "what's on my plate?" or "what projects do I have?", I read these files.
+When you ask "what's on my plate?" I read these files. See AGENTS.md for exact formats.
 
 ---
 
