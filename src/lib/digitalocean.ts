@@ -554,8 +554,112 @@ cp /home/openclaw/.npmrc /root/.npmrc
 echo "Installing @getastridai/admin-agent..." >> /var/log/openclaw-init.log
 npm install -g @getastridai/admin-agent >> /var/log/openclaw-init.log 2>&1
 
-echo "Installing @getastridai/skills..." >> /var/log/openclaw-init.log
-WORKSPACE_PATH=/home/openclaw/workspace npm install -g @getastridai/skills >> /var/log/openclaw-init.log 2>&1
+# Write astrid-pm skill directly (more reliable than npm install)
+echo "Writing astrid-pm skill..." >> /var/log/openclaw-init.log
+mkdir -p /home/openclaw/workspace/skills/astrid-pm
+cat > /home/openclaw/workspace/skills/astrid-pm/SKILL.md << 'SKILLEOF'
+---
+name: astrid-pm
+description: Astrid Project Management system for tracking projects, tasks, ideas, and inbox items. Use when managing projects, adding tasks, capturing ideas, processing inbox, or when user asks about their work items. Triggers on: "new project", "add task", "new idea", "add to inbox", "what's on my plate", "show projects", "mark done", or any project/task management request.
+---
+
+# Astrid Project Management
+
+You manage the user's work using four markdown files in the workspace root. These files sync with the Astrid dashboard — follow the formats exactly.
+
+## TASKS.md Format
+
+Standalone tasks not tied to any project. Organized by timeframe.
+
+Sections: **Today**, **This Week**, **Later**, **Done**
+- Tasks use - [ ] (incomplete) or - [x] (complete)
+- @due(YYYY-MM-DD) for due dates (optional)
+- @high, @urgent, or @low for priority (optional)
+- @done(YYYY-MM-DD) when marking complete
+
+Example:
+## Today
+- [ ] Urgent task @high
+- [ ] Call dentist @due(2026-02-01)
+
+## This Week
+- [ ] Review insurance renewal @due(2026-02-05)
+
+## Later
+- [ ] Research vacation destinations
+
+## Done
+- [x] Fix garage door @done(2026-01-28)
+
+## PROJECTS.md Format
+
+Example:
+## Project Name
+Status: active
+Description of the project goes here.
+
+### Tasks
+- [ ] Incomplete task @due(2026-02-10) @high
+- [x] Completed task @done(2026-02-03)
+
+Rules:
+- One ## Project Name section per project
+- Status line required: active, on-hold, or completed
+- Description text on lines after status (before ### Tasks)
+- ### Tasks section contains project tasks
+- Tasks use same format as TASKS.md
+
+## IDEAS.md Format
+
+Example:
+## AI-Powered Customer Support Chatbot
+Added: 2026-02-01
+Tags: product, ai, customer-service
+
+Could reduce ticket volume by 40%.
+
+---
+
+Rules:
+- ## Idea Title as the heading
+- Added: YYYY-MM-DD for when captured
+- Tags: tag1, tag2 for categorization
+- Description text follows metadata
+- --- separator between ideas
+
+## INBOX.md Format
+
+Simple flat list:
+- Follow up with Mike about server migration
+- Book flight for Denver conference
+
+Rules:
+- Simple flat list with - item
+- No checkboxes needed — this is a capture list
+- Process items by moving them to Projects, Tasks, or Ideas
+
+## Commands
+
+Projects: "new project [name]", "add task [task] to [project]", "pause [project]", "complete project [name]", "show projects"
+Tasks: "add task [task]", "done [task]", "show tasks", "what's on my plate"
+Ideas: "new idea [title]", "show ideas", "promote idea [name] to project"
+Inbox: "add to inbox [item]", "capture [item]", "process inbox", "show inbox"
+
+## Important
+
+1. Always update the actual files — don't just respond, write the changes
+2. Preserve existing content — read before writing
+3. Follow formats exactly — the dashboard parses these files
+4. Confirm actions — tell the user what you did
+
+## Quick Reference
+
+TASKS.md:    ## Today/This Week/Later/Done then - [ ] task @due() @high
+PROJECTS.md: ## Name then Status: active then ### Tasks then - [ ] task
+IDEAS.md:    ## Idea Title then Added: date then Tags: tags then description then ---
+INBOX.md:    - item to capture
+SKILLEOF
+chown -R openclaw:openclaw /home/openclaw/workspace/skills
 
 # Create systemd services
 cat > /etc/systemd/system/astrid-admin.service << 'ADMINSERVICEEOF'
