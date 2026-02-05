@@ -21,6 +21,18 @@ export async function GET(_req: Request, { params }: RouteParams) {
   }
 }
 
+// PATCH /api/vm/inbox/:id - Update an inbox item
+export async function PATCH(req: Request, { params }: RouteParams) {
+  try {
+    const { id } = await params;
+    const body = await req.json();
+    const data = await callAdminAPI(`/inbox/${id}`, { method: 'PATCH', body });
+    return apiResponse(data);
+  } catch (error) {
+    return apiError(error);
+  }
+}
+
 // DELETE /api/vm/inbox/:id - Delete an inbox item
 export async function DELETE(_req: Request, { params }: RouteParams) {
   try {
