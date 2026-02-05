@@ -403,87 +403,9 @@ cat > /home/openclaw/workspace/INBOX.md << 'EOF'
 <!-- Quick captures go here. Try saying "add to inbox [item]" or just "capture [thought]" -->
 EOF
 
-# Astrid PM Skill
-cat > /home/openclaw/workspace/skills/astrid-pm/SKILL.md << 'SKILLEOF'
----
-name: astrid-pm
-description: Astrid Project Management system for tracking projects, tasks, ideas, and inbox items. Use when managing projects, adding tasks, capturing ideas, processing inbox, or when user asks about their work items. Triggers on: "new project", "add task", "new idea", "add to inbox", "what's on my plate", "show projects", "mark done", or any project/task management request.
----
-
-# Astrid Project Management
-
-You manage the user's work using markdown files in the workspace root. These files sync with the Astrid dashboard — follow the formats exactly.
-
-## File Locations
-
-- PROJECTS.md - Active projects with nested tasks
-- TASKS.md - Standalone tasks (not tied to projects)
-- IDEAS.md - Future ideas backlog
-- INBOX.md - Quick capture (to be processed)
-
-## PROJECTS.md Format
-
-## Project Name
-Status: active | paused | completed
-Created: YYYY-MM-DD
-
-Description of the project.
-
-### Tasks
-- [ ] Incomplete task @due(YYYY-MM-DD) @priority(high|medium|low)
-- [x] Completed task @done(YYYY-MM-DD)
-
----
-
-Rules: One ## section per project. Status line required. Tasks use - [ ] or - [x]. Projects separated by ---.
-
-## TASKS.md Format
-
-# Tasks
-
-## Today
-- [ ] Task @due(date) @priority(level)
-
-## This Week
-- [ ] Task
-
-## Later
-- [ ] Task
-
-## Done
-- [x] Task @done(date)
-
-Rules: Four sections. Move tasks between sections as needed. Move completed to Done with @done(date).
-
-## IDEAS.md Format
-
-## Idea Title
-Added: YYYY-MM-DD
-Tags: tag1, tag2
-
-Description.
-
----
-
-## INBOX.md Format
-
-- [ ] Quick note @added(YYYY-MM-DD)
-- [x] Processed item @added(date) → Moved to Project X
-
-## Commands
-
-Projects: "new project [name]", "add task [task] to [project]", "pause [project]", "show projects"
-Tasks: "add task [task]", "add task [x] for this week", "done [task]", "show tasks", "what's on my plate"
-Ideas: "new idea [title]", "show ideas", "promote idea [name] to project"
-Inbox: "add to inbox [item]", "capture [item]", "process inbox", "show inbox"
-
-## Important
-
-1. Always update the actual files — don't just respond, write the changes
-2. Preserve existing content — read before writing
-3. Follow formats exactly — the dashboard parses these files
-4. Confirm actions — tell the user what you did
-SKILLEOF
+# Astrid PM Skill - installed by @getastridai/skills package
+# The skill is copied to workspace by the postinstall script
+# We just ensure the directory exists (created above)
 
 # First-contact hook for warm welcome on first message
 mkdir -p /home/openclaw/workspace/hooks/first-contact
@@ -583,7 +505,7 @@ echo "Installing @getastridai/admin-agent..." >> /var/log/openclaw-init.log
 npm install -g @getastridai/admin-agent >> /var/log/openclaw-init.log 2>&1
 
 echo "Installing @getastridai/skills..." >> /var/log/openclaw-init.log
-npm install -g @getastridai/skills >> /var/log/openclaw-init.log 2>&1
+WORKSPACE_PATH=/home/openclaw/workspace npm install -g @getastridai/skills >> /var/log/openclaw-init.log 2>&1
 
 # Note: @getastridai/control-plane will be installed when ready
 # npm install -g @getastridai/control-plane >> /var/log/openclaw-init.log 2>&1
