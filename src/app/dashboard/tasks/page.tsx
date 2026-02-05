@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTasks, Task } from '@/hooks/use-workspace';
+import { useTasks, Task, useProjects } from '@/hooks/use-workspace';
 import { 
   CheckCircle2, 
   Circle,
@@ -12,11 +12,15 @@ import {
   RefreshCw,
   Plus,
   Trash2,
-  X
+  X,
+  Pencil,
+  Rocket,
+  Check
 } from 'lucide-react';
 
 export default function TasksPage() {
-  const { tasks, sections, isLoading, isError, error, refresh, toggleTask, addTask, deleteTask } = useTasks();
+  const { tasks, sections, isLoading, isError, error, refresh, toggleTask, addTask, updateTask, deleteTask, promoteTask } = useTasks();
+  const { refresh: refreshProjects } = useProjects();
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -158,7 +162,10 @@ export default function TasksPage() {
           icon={<AlertTriangle className="w-4 h-4 text-red-500" />}
           tasks={tasksBySection.today}
           onToggle={handleToggle}
+          onUpdate={updateTask}
           onDelete={handleDelete}
+          onPromote={promoteTask}
+          onProjectsRefresh={refreshProjects}
         />
       )}
 
@@ -168,7 +175,10 @@ export default function TasksPage() {
           icon={<Clock className="w-4 h-4 text-amber-500" />}
           tasks={tasksBySection.thisWeek}
           onToggle={handleToggle}
+          onUpdate={updateTask}
           onDelete={handleDelete}
+          onPromote={promoteTask}
+          onProjectsRefresh={refreshProjects}
         />
       )}
 
@@ -178,7 +188,10 @@ export default function TasksPage() {
           icon={<Circle className="w-4 h-4 text-slate-400" />}
           tasks={tasksBySection.later}
           onToggle={handleToggle}
+          onUpdate={updateTask}
           onDelete={handleDelete}
+          onPromote={promoteTask}
+          onProjectsRefresh={refreshProjects}
         />
       )}
 
@@ -188,7 +201,10 @@ export default function TasksPage() {
           icon={<CheckCircle2 className="w-4 h-4 text-green-500" />}
           tasks={tasksBySection.done}
           onToggle={handleToggle}
+          onUpdate={updateTask}
           onDelete={handleDelete}
+          onPromote={promoteTask}
+          onProjectsRefresh={refreshProjects}
         />
       )}
 
@@ -291,10 +307,13 @@ interface TaskSectionProps {
   icon: React.ReactNode;
   tasks: Task[];
   onToggle: (task: Task) => void;
+  onUpdate: (taskId: string, updates: { title?: string; due?: string; priority?: string }) => Promise<void>;
   onDelete: (taskId: string) => void;
+  onPromote: (taskId: string) => Promise<unknown>;
+  onProjectsRefresh: () => void;
 }
 
-function TaskSection({ title, icon, tasks, onToggle, onDelete }: TaskSectionProps) {
+function TaskSection({ title, icon, tasks, onToggle, onUpdate, onDelete, onPromote, onProjectsRefresh }: TaskSectionProps) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3 text-sm font-medium text-slate-600">
@@ -308,7 +327,10 @@ function TaskSection({ title, icon, tasks, onToggle, onDelete }: TaskSectionProp
             key={task.id} 
             task={task} 
             onToggle={onToggle}
+            onUpdate={onUpdate}
             onDelete={onDelete}
+            onPromote={onPromote}
+            onProjectsRefresh={onProjectsRefresh}
           />
         ))}
       </div>
@@ -319,56 +341,192 @@ function TaskSection({ title, icon, tasks, onToggle, onDelete }: TaskSectionProp
 interface TaskRowProps {
   task: Task;
   onToggle: (task: Task) => void;
+  onUpdate: (taskId: string, updates: { title?: string; due?: string; priority?: string }) => Promise<void>;
   onDelete: (taskId: string) => void;
+  onPromote: (taskId: string) => Promise<unknown>;
+  onProjectsRefresh: () => void;
 }
 
-function TaskRow({ task, onToggle, onDelete }: TaskRowProps) {
+function TaskRow({ task, onToggle, onUpdate, onDelete, onPromote, onProjectsRefresh }: TaskRowProps) {
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const isOverdue = !task.done && task.due && new Date(task.due) < new Date();
+
+  const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsUpdating(true);
+    
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const title = formData.get('title') as string;
+    const due = formData.get('due') as string;
+    const priority = formData.get('priority') as string;
+
+    try {
+      await onUpdate(task.id, { title, due: due || undefined, priority });
+      setShowEditModal(false);
+    } catch (err) {
+      console.error('Failed to update task:', err);
+      alert('Failed to update task');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handlePromote = async () => {
+    if (!confirm(`Promote "${task.title}" to a project?`)) return;
+    try {
+      await onPromote(task.id);
+      onProjectsRefresh(); // Refresh projects list
+    } catch (err) {
+      console.error('Failed to promote task:', err);
+      alert('Failed to promote task');
+    }
+  };
   
   return (
-    <div className="flex items-center gap-3 p-4 group">
-      <button
-        onClick={() => onToggle(task)}
-        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-          task.done 
-            ? 'bg-green-100 border-green-500 text-green-600 hover:bg-green-200' 
-            : 'border-slate-300 hover:border-amber-500 hover:bg-amber-50'
-        }`}
-      >
-        {task.done && <CheckCircle2 className="w-3 h-3" />}
-      </button>
-      
-      <span 
-        className={`flex-1 cursor-pointer ${task.done ? 'text-slate-400 line-through' : 'text-slate-800'}`}
-        onClick={() => onToggle(task)}
-      >
-        {task.title}
-      </span>
-      
-      {task.due && (
-        <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
-          <Clock className="w-3 h-3" />
-          {task.due}
+    <>
+      <div className="flex items-center gap-3 p-4 group">
+        <button
+          onClick={() => onToggle(task)}
+          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+            task.done 
+              ? 'bg-green-100 border-green-500 text-green-600 hover:bg-green-200' 
+              : 'border-slate-300 hover:border-amber-500 hover:bg-amber-50'
+          }`}
+        >
+          {task.done && <CheckCircle2 className="w-3 h-3" />}
+        </button>
+        
+        <span 
+          className={`flex-1 cursor-pointer ${task.done ? 'text-slate-400 line-through' : 'text-slate-800'}`}
+          onClick={() => onToggle(task)}
+        >
+          {task.title}
         </span>
-      )}
-      
-      {task.priority && task.priority !== 'normal' && (
-        <span className={`text-xs px-2 py-0.5 rounded-full ${
-          task.priority === 'urgent' ? 'bg-red-100 text-red-700' :
-          task.priority === 'high' ? 'bg-orange-100 text-orange-700' :
-          'bg-slate-100 text-slate-600'
-        }`}>
-          {task.priority}
-        </span>
-      )}
+        
+        {task.due && (
+          <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
+            <Clock className="w-3 h-3" />
+            {task.due}
+          </span>
+        )}
+        
+        {task.priority && task.priority !== 'normal' && (
+          <span className={`text-xs px-2 py-0.5 rounded-full ${
+            task.priority === 'urgent' ? 'bg-red-100 text-red-700' :
+            task.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+            'bg-slate-100 text-slate-600'
+          }`}>
+            {task.priority}
+          </span>
+        )}
 
-      <button
-        onClick={() => onDelete(task.id)}
-        className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-        title="Delete task"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
-    </div>
+        <button
+          onClick={() => setShowEditModal(true)}
+          className="p-1 text-slate-300 hover:text-amber-500 opacity-0 group-hover:opacity-100 transition-all"
+          title="Edit task"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={handlePromote}
+          className="p-1 text-slate-300 hover:text-purple-500 opacity-0 group-hover:opacity-100 transition-all"
+          title="Promote to project"
+        >
+          <Rocket className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={() => onDelete(task.id)}
+          className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+          title="Delete task"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Edit Task Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-900">Edit Task</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleEdit} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Task title *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  required
+                  autoFocus
+                  defaultValue={task.title}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Due date
+                  </label>
+                  <input
+                    type="date"
+                    name="due"
+                    defaultValue={task.due || ''}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Priority
+                  </label>
+                  <select
+                    name="priority"
+                    defaultValue={task.priority || 'normal'}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  >
+                    <option value="normal">Normal</option>
+                    <option value="low">Low</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50"
+                >
+                  {isUpdating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

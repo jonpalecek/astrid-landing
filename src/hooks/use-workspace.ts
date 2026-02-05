@@ -111,6 +111,48 @@ export function useTasks() {
     );
   };
 
+  // Update a task (title, due, priority)
+  const updateTask = async (taskId: string, updates: { title?: string; due?: string; priority?: string }) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      tasks: data.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t)
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/tasks/${taskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        });
+        if (!res.ok) throw new Error('Failed to update task');
+        return fetcher('/api/vm/tasks');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
+  // Promote task to project
+  const promoteTask = async (taskId: string) => {
+    // Optimistic: remove from tasks list
+    const optimisticData = data ? {
+      ...data,
+      tasks: data.tasks.filter(t => t.id !== taskId)
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/tasks/${taskId}/promote`, {
+          method: 'POST',
+        });
+        if (!res.ok) throw new Error('Failed to promote task');
+        return fetcher('/api/vm/tasks');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
   return {
     tasks: data?.tasks || [],
     sections: data?.sections || { today: [], thisWeek: [], later: [], done: [] },
@@ -120,7 +162,9 @@ export function useTasks() {
     refresh: mutate,
     toggleTask,
     addTask,
+    updateTask,
     deleteTask,
+    promoteTask,
   };
 }
 
