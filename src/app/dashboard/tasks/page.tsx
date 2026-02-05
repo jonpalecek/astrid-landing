@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTasks, Task, useProjects } from '@/hooks/use-workspace';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import { 
   CheckCircle2, 
   Circle,
@@ -349,6 +350,8 @@ interface TaskRowProps {
 
 function TaskRow({ task, onToggle, onUpdate, onDelete, onPromote, onProjectsRefresh }: TaskRowProps) {
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPromoteConfirm, setShowPromoteConfirm] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const isOverdue = !task.done && task.due && new Date(task.due) < new Date();
 
@@ -374,13 +377,22 @@ function TaskRow({ task, onToggle, onUpdate, onDelete, onPromote, onProjectsRefr
   };
 
   const handlePromote = async () => {
-    if (!confirm(`Promote "${task.title}" to a project?`)) return;
+    setShowPromoteConfirm(false);
     try {
       await onPromote(task.id);
-      onProjectsRefresh(); // Refresh projects list
+      onProjectsRefresh();
     } catch (err) {
       console.error('Failed to promote task:', err);
       alert('Failed to promote task');
+    }
+  };
+
+  const handleDelete = async () => {
+    setShowDeleteConfirm(false);
+    try {
+      await onDelete(task.id);
+    } catch (err) {
+      console.error('Failed to delete task:', err);
     }
   };
   
@@ -431,7 +443,7 @@ function TaskRow({ task, onToggle, onUpdate, onDelete, onPromote, onProjectsRefr
         </button>
 
         <button
-          onClick={handlePromote}
+          onClick={() => setShowPromoteConfirm(true)}
           className="p-1 text-slate-300 hover:text-purple-500 opacity-0 group-hover:opacity-100 transition-all"
           title="Promote to project"
         >
@@ -439,13 +451,35 @@ function TaskRow({ task, onToggle, onUpdate, onDelete, onPromote, onProjectsRefr
         </button>
 
         <button
-          onClick={() => onDelete(task.id)}
+          onClick={() => setShowDeleteConfirm(true)}
           className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
           title="Delete task"
         >
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Delete Confirmation */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="Delete Task"
+        message={`Are you sure you want to delete "${task.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      {/* Promote Confirmation */}
+      <ConfirmModal
+        isOpen={showPromoteConfirm}
+        title="Promote to Project"
+        message={`Create a new project from "${task.title}"? The task will be removed from your task list.`}
+        confirmText="Promote"
+        variant="promote"
+        onConfirm={handlePromote}
+        onCancel={() => setShowPromoteConfirm(false)}
+      />
 
       {/* Edit Task Modal */}
       {showEditModal && (

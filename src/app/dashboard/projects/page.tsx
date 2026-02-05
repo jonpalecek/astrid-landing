@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useProjects, Project, ProjectTask } from '@/hooks/use-workspace';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import { 
   Rocket, 
   Target, 
@@ -49,8 +50,7 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleDelete = async (projectId: string, projectName: string) => {
-    if (!confirm(`Delete "${projectName}" and all its tasks?`)) return;
+  const handleDelete = async (projectId: string) => {
     try {
       await deleteProject(projectId);
     } catch (err) {
@@ -262,7 +262,7 @@ interface ProjectSectionProps {
   icon: React.ReactNode;
   projects: Project[];
   onStatusChange: (projectId: string, status: string) => void;
-  onDelete: (projectId: string, projectName: string) => void;
+  onDelete: (projectId: string) => void;
   onUpdateProject: (projectId: string, updates: { name?: string; description?: string }) => Promise<void>;
   onToggleTask: (projectId: string, taskId: string, done: boolean) => Promise<void>;
   onAddTask: (projectId: string, task: { title: string; due?: string; priority?: string }) => Promise<void>;
@@ -300,7 +300,7 @@ function ProjectSection({ title, icon, projects, onStatusChange, onDelete, onUpd
 interface ProjectCardProps {
   project: Project;
   onStatusChange: (projectId: string, status: string) => void;
-  onDelete: (projectId: string, projectName: string) => void;
+  onDelete: (projectId: string) => void;
   onUpdateProject: (projectId: string, updates: { name?: string; description?: string }) => Promise<void>;
   onToggleTask: (projectId: string, taskId: string, done: boolean) => Promise<void>;
   onAddTask: (projectId: string, task: { title: string; due?: string; priority?: string }) => Promise<void>;
@@ -312,6 +312,8 @@ function ProjectCard({ project, onStatusChange, onDelete, onUpdateProject, onTog
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   
@@ -335,11 +337,22 @@ function ProjectCard({ project, onStatusChange, onDelete, onUpdateProject, onTog
     }
   };
 
-  const handleDeleteTask = async (taskId: string) => {
+  const handleDeleteTask = async () => {
+    if (!taskToDelete) return;
+    setTaskToDelete(null);
     try {
-      await onDeleteTask(project.id, taskId);
+      await onDeleteTask(project.id, taskToDelete);
     } catch (err) {
       console.error('Failed to delete task:', err);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    setShowDeleteConfirm(false);
+    try {
+      await onDelete(project.id);
+    } catch (err) {
+      console.error('Failed to delete project:', err);
     }
   };
 
@@ -472,7 +485,7 @@ function ProjectCard({ project, onStatusChange, onDelete, onUpdateProject, onTog
 
           {/* Delete Button */}
           <button
-            onClick={() => onDelete(project.id, project.name)}
+            onClick={() => setShowDeleteConfirm(true)}
             className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
             title="Delete project"
           >
@@ -533,7 +546,7 @@ function ProjectCard({ project, onStatusChange, onDelete, onUpdateProject, onTog
                 <Pencil className="w-3 h-3" />
               </button>
               <button
-                onClick={() => handleDeleteTask(task.id)}
+                onClick={() => setTaskToDelete(task.id)}
                 className="p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover/task:opacity-100 transition-all"
                 title="Delete task"
               >
@@ -748,6 +761,28 @@ function ProjectCard({ project, onStatusChange, onDelete, onUpdateProject, onTog
           </div>
         </div>
       )}
+
+      {/* Delete Project Confirmation */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="Delete Project"
+        message={`Are you sure you want to delete "${project.name}" and all its tasks? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+        onConfirm={handleDeleteProject}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      {/* Delete Task Confirmation */}
+      <ConfirmModal
+        isOpen={!!taskToDelete}
+        title="Delete Task"
+        message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+        onConfirm={handleDeleteTask}
+        onCancel={() => setTaskToDelete(null)}
+      />
     </div>
   );
 }
