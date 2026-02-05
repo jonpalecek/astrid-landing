@@ -50,9 +50,9 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleDelete = async (projectId: string) => {
+  const handleDelete = async (projectId: string, deleteFolder: boolean) => {
     try {
-      await deleteProject(projectId);
+      await deleteProject(projectId, deleteFolder);
     } catch (err) {
       console.error('Failed to delete project:', err);
     }
@@ -262,7 +262,7 @@ interface ProjectSectionProps {
   icon: React.ReactNode;
   projects: Project[];
   onStatusChange: (projectId: string, status: string) => void;
-  onDelete: (projectId: string) => void;
+  onDelete: (projectId: string, deleteFolder: boolean) => void;
   onUpdateProject: (projectId: string, updates: { name?: string; description?: string }) => Promise<void>;
   onToggleTask: (projectId: string, taskId: string, done: boolean) => Promise<void>;
   onAddTask: (projectId: string, task: { title: string; due?: string; priority?: string }) => Promise<void>;
@@ -300,7 +300,7 @@ function ProjectSection({ title, icon, projects, onStatusChange, onDelete, onUpd
 interface ProjectCardProps {
   project: Project;
   onStatusChange: (projectId: string, status: string) => void;
-  onDelete: (projectId: string) => void;
+  onDelete: (projectId: string, deleteFolder: boolean) => void;
   onUpdateProject: (projectId: string, updates: { name?: string; description?: string }) => Promise<void>;
   onToggleTask: (projectId: string, taskId: string, done: boolean) => Promise<void>;
   onAddTask: (projectId: string, task: { title: string; due?: string; priority?: string }) => Promise<void>;
@@ -313,6 +313,7 @@ function ProjectCard({ project, onStatusChange, onDelete, onUpdateProject, onTog
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showFolderDeleteConfirm, setShowFolderDeleteConfirm] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -347,10 +348,16 @@ function ProjectCard({ project, onStatusChange, onDelete, onUpdateProject, onTog
     }
   };
 
-  const handleDeleteProject = async () => {
+  const handleDeleteProject = () => {
     setShowDeleteConfirm(false);
+    // Show second modal asking about folder deletion
+    setShowFolderDeleteConfirm(true);
+  };
+
+  const handleConfirmFolderDelete = async (deleteFolder: boolean) => {
+    setShowFolderDeleteConfirm(false);
     try {
-      await onDelete(project.id);
+      await onDelete(project.id, deleteFolder);
     } catch (err) {
       console.error('Failed to delete project:', err);
     }
@@ -762,16 +769,57 @@ function ProjectCard({ project, onStatusChange, onDelete, onUpdateProject, onTog
         </div>
       )}
 
-      {/* Delete Project Confirmation */}
+      {/* Delete Project Confirmation - Step 1 */}
       <ConfirmModal
         isOpen={showDeleteConfirm}
         title="Delete Project"
         message={`Are you sure you want to delete "${project.name}" and all its tasks? This action cannot be undone.`}
-        confirmText="Delete"
+        confirmText="Continue"
         variant="danger"
         onConfirm={handleDeleteProject}
         onCancel={() => setShowDeleteConfirm(false)}
       />
+
+      {/* Delete Folder Confirmation - Step 2 */}
+      {showFolderDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4">
+            <div className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="p-3 rounded-full bg-amber-100">
+                  <Trash2 className="w-6 h-6 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-slate-900">Delete Project Folder?</h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    This project has a folder with files. Do you also want to delete the folder and all its contents?
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 px-6 pb-6">
+              <button
+                onClick={() => handleConfirmFolderDelete(true)}
+                className="w-full px-4 py-2 text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors font-medium"
+              >
+                Delete Project & Folder
+              </button>
+              <button
+                onClick={() => handleConfirmFolderDelete(false)}
+                className="w-full px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+              >
+                Delete Project Only (Keep Folder)
+              </button>
+              <button
+                onClick={() => setShowFolderDeleteConfirm(false)}
+                className="w-full px-4 py-2 text-slate-500 hover:text-slate-700 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Task Confirmation */}
       <ConfirmModal

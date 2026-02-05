@@ -239,8 +239,8 @@ export function useProjects() {
     return updateProject(projectId, { status });
   };
 
-  // Delete a project
-  const deleteProject = async (projectId: string) => {
+  // Delete a project (optionally delete folder too)
+  const deleteProject = async (projectId: string, deleteFolder: boolean = false) => {
     // Optimistic update
     const optimisticData = data ? {
       ...data,
@@ -249,7 +249,10 @@ export function useProjects() {
 
     await mutate(
       async () => {
-        const res = await fetch(`/api/vm/projects/${projectId}`, {
+        const url = deleteFolder 
+          ? `/api/vm/projects/${projectId}?deleteFolder=true`
+          : `/api/vm/projects/${projectId}`;
+        const res = await fetch(url, {
           method: 'DELETE',
         });
         if (!res.ok) throw new Error('Failed to delete project');
