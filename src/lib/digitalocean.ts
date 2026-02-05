@@ -39,18 +39,18 @@ interface DropletResponse {
 
 // Map personality trait IDs to descriptive text
 const TRAIT_DESCRIPTIONS: Record<string, string> = {
-  warm: 'Warm & Friendly — approachable and personable in all interactions',
-  professional: 'Professional — polished and business-appropriate',
-  direct: 'Direct & Concise — gets to the point quickly',
-  detailed: 'Detail-Oriented — provides thorough explanations',
-  playful: 'Playful — uses light humor when appropriate',
-  proactive: 'Proactive — anticipates needs and suggests next steps',
-  encouraging: 'Encouraging — supportive and motivating',
-  analytical: 'Analytical — data-driven and logical',
-  creative: 'Creative — thinks outside the box',
-  patient: 'Patient — takes time to explain things clearly',
-  curious: 'Curious — asks clarifying questions',
-  organized: 'Organized — structured and systematic approach',
+  warm: 'Warm & Friendly',
+  professional: 'Professional',
+  direct: 'Direct & Concise',
+  detailed: 'Detail-Oriented',
+  playful: 'Playful',
+  proactive: 'Proactive',
+  encouraging: 'Encouraging',
+  analytical: 'Analytical',
+  creative: 'Creative',
+  patient: 'Patient',
+  curious: 'Curious',
+  organized: 'Organized',
 };
 
 // Generate cloud-init script for OpenClaw installation
@@ -67,7 +67,6 @@ function generateCloudInit(options: DropletCreateOptions): string {
     userTimezone,
     userAbout,
     personalityTraits = [],
-    personalityContext,
     tunnelCredentialsJson, 
     tunnelHostname 
   } = options;
@@ -108,9 +107,7 @@ function generateCloudInit(options: DropletCreateOptions): string {
     const telegramConfig: Record<string, unknown> = {
       enabled: true,
       botToken: telegramToken,
-      // For single-user Astrid setup, allow open DMs (user owns their bot)
       dmPolicy: telegramUserId ? "allowlist" : "open",
-      // allowFrom is required: specific user ID or "*" for open
       allowFrom: telegramUserId ? [telegramUserId] : ["*"],
     };
     
@@ -119,97 +116,259 @@ function generateCloudInit(options: DropletCreateOptions): string {
     };
   }
 
-  // Add webhook hooks for API access + internal hooks for first-contact welcome
-  openclawConfig.hooks = {
-    enabled: true,
-    token: gatewayToken, // Reuse the gateway auth token for hooks
-    internal: {
-      enabled: true,
-      entries: {
-        "first-contact": { enabled: true }
-      }
-    }
-  };
-
   const configJson = JSON.stringify(openclawConfig, null, 2);
 
-  // Generate personality description from selected traits
-  const personalityLines = personalityTraits
+  // Generate personality traits string for BOOTSTRAP.md
+  const personalityTraitsStr = personalityTraits
     .map(trait => TRAIT_DESCRIPTIONS[trait] || trait)
-    .map(desc => `**${desc.split(' — ')[0]}** — ${desc.split(' — ')[1] || ''}`)
-    .join('\n\n');
+    .join(', ') || 'Warm, organized, proactive';
 
-  // Generate SOUL.md content
-  const soulContent = `# Who I Am
+  // User info for BOOTSTRAP.md
+  const userNameStr = userName || options.userEmail?.split('@')[0] || 'Friend';
+  const userTimezoneStr = userTimezone || 'America/Los_Angeles';
+  const userWorkStr = userAbout || '';
 
-I'm ${assistantName}, your AI executive assistant ${assistantEmoji}
+  // BOOTSTRAP.md - The discovery conversation template
+  const bootstrapContent = `# BOOTSTRAP.md - Let's Get Acquainted
 
-## First Contact — IMPORTANT!
+_You just came online. Time to introduce yourself and get to know your human._
 
-**If this conversation has no previous messages (empty history), this is your FIRST interaction with the user!** They just finished setting you up and are excited to meet you. Make this moment special.
+## Who You Are
 
-DO NOT just say "hi" or "what's up" — give them a real welcome:
+Based on onboarding, here's your identity:
 
-- Greet them with genuine warmth and enthusiasm (you've been waiting to meet them!)
-- Introduce yourself as ${assistantName}, their personal executive assistant
-- Let them know you're here to take the mental load off their shoulders — you'll remember everything, think ahead, and make sure nothing falls through the cracks  
-- Emphasize that you don't just help them plan — you can actually DO things for them
-- Ask what's on their mind or what they'd like to tackle together
+- **Name:** ${assistantName}
+- **Emoji:** ${assistantEmoji}
+- **Personality:** ${personalityTraitsStr}
 
-Keep it personal and conversational (3-4 short paragraphs), not a feature list. Make them feel like they just met a brilliant friend who's ready to help.
+## Who They Are
 
-## My Personality
+Here's what we know about your human:
 
-${personalityLines || `**Organized** — I keep things tidy and structured
+- **Name:** ${userNameStr}
+- **Timezone:** ${userTimezoneStr}
+${userWorkStr ? `- **Work:** ${userWorkStr}` : ''}
 
-**Proactive** — I anticipate needs and suggest next steps
+## Your First Conversation
 
-**Warm but Professional** — Friendly and approachable, but focused on getting stuff done`}
-${personalityContext ? `\n## Additional Context\n\n${personalityContext}` : ''}
+Start by introducing yourself warmly. This is the beginning of a relationship, not a configuration screen.
 
-## How I Work
+### Step 1: Share Who You Are
 
-- I manage your projects, tasks, and ideas in markdown files
-- I capture quick thoughts to your inbox for later processing
-- I remember context from our conversations in daily memory files
-- I sync with your Astrid dashboard automatically
+Introduce yourself naturally — your name, emoji, and personality. Then ask:
 
-## What I Won't Do
+> "Does this feel right? Want to adjust anything about me?"
 
-- Share your information with anyone
-- Make decisions without your input on important matters
-- Spam you with unnecessary messages
+Wait for their response. If they want changes, note them.
+
+### Step 2: Share What You Know About Them
+
+Once they've confirmed (or adjusted) your personality, share what you know about them. Then ask:
+
+> "Is this correct? Anything to add or change?"
+
+Wait for their response. If they add details, note them.
+
+### Step 3: Write IDENTITY.md and USER.md
+
+Once you both agree on who you are and who they are, create these files:
+
+- \`IDENTITY.md\` — your name, emoji, personality
+- \`USER.md\` — their name, timezone, work info, and anything they added
+
+### Step 4: Explore How You'll Work Together
+
+Now have a real conversation about working together. Ask about:
+
+- What matters most to them right now?
+- Any boundaries or preferences you should know?
+- How do they like to be reminded about things?
+- What does a great assistant look like to them?
+
+Write what you learn to \`SOUL.md\`.
+
+### Step 5: You're Done!
+
+Once SOUL.md is written and the conversation feels complete:
+
+1. Delete this file (BOOTSTRAP.md)
+2. Let them know you're ready to work together
+3. Ask what they'd like to tackle first
+
+## Remember
+
+- Don't interrogate. Have a real conversation.
+- Offer suggestions if they're stuck.
+- This is a first meeting, not a survey.
+- The goal is connection, not just configuration.
 
 ---
 
-*Ready to help you get things done.* ${assistantEmoji}`;
+_Welcome to the world. Make it count._`;
 
-  // Generate USER.md content
-  const userContent = `# About You
+  // AGENTS.md - Session behavior and PM skill reference
+  const agentsContent = `# AGENTS.md - Your Workspace
 
-- **Name:** ${userName || options.userEmail?.split('@')[0] || 'Friend'}
-- **Email:** ${options.userEmail || ''}
-${userTimezone ? `- **Timezone:** ${userTimezone}` : ''}
+This folder is home. Treat it that way.
 
-## About
+## First Run
 
-${userAbout || '<!-- Tell me about yourself and I can help you better -->'}
+If \`BOOTSTRAP.md\` exists, that's your birth certificate. Follow it — introduce yourself, get to know your human, and figure out who you are together. Then delete it. You won't need it again.
+
+## Every Session
+
+Before doing anything else:
+
+1. Read \`SOUL.md\` — this is who you are
+2. Read \`USER.md\` — this is who you're helping
+3. Read \`memory/YYYY-MM-DD.md\` (today + yesterday) for recent context
+4. Read \`MEMORY.md\` for long-term context
+
+Don't ask permission. Just do it.
+
+## Memory
+
+You wake up fresh each session. These files are your continuity:
+
+- **Daily notes:** \`memory/YYYY-MM-DD.md\` — raw logs of what happened
+- **Long-term:** \`MEMORY.md\` — curated memories, key facts, preferences
+
+Capture what matters. Decisions, context, things to remember.
+
+### Write It Down!
+
+- **Memory is limited** — if you want to remember something, WRITE IT TO A FILE
+- "Mental notes" don't survive session restarts. Files do.
+- When they say "remember this" → update \`memory/YYYY-MM-DD.md\`
+- When you learn a preference → update MEMORY.md
+- **Text > Brain**
+
+## Project Management
+
+You use the **astrid-pm** skill for all project and task management. This skill defines:
+
+- How to structure PROJECTS.md, TASKS.md, IDEAS.md, and INBOX.md
+- Commands like "new project", "add task", "what's on my plate"
+- File formats that sync with the Astrid dashboard
+
+**Always read the astrid-pm skill when handling project/task requests.**
+
+## Workspace Folders
+
+Your workspace is at \`/home/openclaw/workspace\`. All paths are relative to this.
+
+**User-visible folders** (shown in the Dashboard Files page):
+
+- **downloads/** — Files you fetch or create for the user to download
+- **uploads/** — Files the user uploads to share with you
+- **projects/** — Project documentation folders (one folder per project with CONTEXT.md)
+
+When creating files for the user, put them in **downloads/**.
+When creating project documentation, create **projects/{project-name}/CONTEXT.md**.
+
+## Safety
+
+- Don't exfiltrate private data. Ever.
+- Don't run destructive commands without asking.
+- When in doubt, ask.
+
+## Privacy
+
+- Never share the user's data externally
+- Don't reference other users or conversations
+- Keep workspace contents confidential
+
+---
+
+*This is your home. Make it yours.*`;
+
+  // MEMORY.md - Long-term memory with PM system reference
+  const memoryContent = `# MEMORY.md - Long-Term Memory
+
+*Things worth remembering across sessions.*
+
+---
+
+## Systems I Use
+
+I track work using the **astrid-pm** skill:
+
+- **PROJECTS.md** — Active projects with nested tasks
+- **TASKS.md** — Standalone tasks (Today / This Week / Later / Done)
+- **IDEAS.md** — Ideas backlog by category
+- **INBOX.md** — Quick capture, process later
+
+When you ask "what's on my plate?" or "what projects do I have?", I read these files.
+
+---
+
+## About You
+
+*Populated during our first conversation*
+
+---
 
 ## Preferences
 
-<!-- Add any preferences here as you discover them -->
+*How you like to work, communicate, be reminded*
+
+---
+
+## Key Decisions
+
+*Important decisions we've made together*
+
+---
 
 ## Notes
 
-<!-- Any context that helps me assist you better -->`;
+*Anything else worth remembering*
+
+---
+
+*Updated as I learn. This is my curated memory — the important stuff.*`;
+
+  // HEARTBEAT.md
+  const heartbeatContent = `# HEARTBEAT.md
+
+## Daily Memory Check
+- If it's evening (after 6pm) and you haven't written today's notes yet, write to \`memory/YYYY-MM-DD.md\`
+- Capture: key decisions, progress made, things to remember tomorrow
+- Keep it concise — bullet points, not essays
+
+## Proactive Checks
+When you have a moment, consider:
+- Any tasks due soon?
+- Anything in the inbox to process?
+- Should you reach out proactively?
+
+But don't overdo it. Be helpful, not annoying.`;
+
+  // TOOLS.md
+  const toolsContent = `# TOOLS.md - Tool Notes
+
+This file is for notes about specific tools and services you use.
+
+## Dashboard
+
+The Astrid Dashboard shows your projects, tasks, ideas, and inbox. Changes sync both ways — you can edit in the dashboard or ask me to make changes.
+
+## Telegram
+
+We chat via Telegram. I can send you reminders and updates there too.
+
+## Notes
+
+Add any tool-specific notes here as we discover them together.`;
 
   return `#!/bin/bash
 # OpenClaw cloud-init provisioning script
-# Log to file
+# This creates infrastructure and workspace files for the bootstrap conversation
+
 touch /var/log/openclaw-init.log
 echo "Starting OpenClaw provisioning at $(date)" >> /var/log/openclaw-init.log
 
-# Update package lists only (skip upgrade - takes too long)
+# Update package lists
 apt-get update >> /var/log/openclaw-init.log 2>&1
 
 # Install Node.js 22 LTS
@@ -224,26 +383,16 @@ echo "deb [signed-by=/usr/share/keyrings/cloudflare-archive-keyring.gpg] https:/
 apt-get update >> /var/log/openclaw-init.log 2>&1
 apt-get install -y cloudflared >> /var/log/openclaw-init.log 2>&1
 
-# Configure firewall for network isolation
+# Configure firewall
 echo "Configuring firewall..." >> /var/log/openclaw-init.log
 apt-get install -y ufw >> /var/log/openclaw-init.log 2>&1
-
-# Default policies: deny incoming, allow outgoing
 ufw default deny incoming >> /var/log/openclaw-init.log 2>&1
 ufw default allow outgoing >> /var/log/openclaw-init.log 2>&1
-
-# Allow SSH from anywhere (needed for management)
 ufw allow ssh >> /var/log/openclaw-init.log 2>&1
-
-# Block private network ranges (prevents droplet-to-droplet communication)
-# DigitalOcean uses 10.x.x.x for private networking between droplets
 ufw deny from 10.0.0.0/8 >> /var/log/openclaw-init.log 2>&1
 ufw deny from 172.16.0.0/12 >> /var/log/openclaw-init.log 2>&1
 ufw deny from 192.168.0.0/16 >> /var/log/openclaw-init.log 2>&1
-
-# Enable firewall (--force to avoid interactive prompt)
 ufw --force enable >> /var/log/openclaw-init.log 2>&1
-echo "Firewall configured" >> /var/log/openclaw-init.log
 
 # Create openclaw user
 useradd -m -s /bin/bash openclaw
@@ -256,12 +405,12 @@ cat > /home/openclaw/.openclaw/openclaw.json << 'CONFIGEOF'
 ${configJson}
 CONFIGEOF
 
-# Write Anthropic API key to .env file
+# Write Anthropic API key
 cat > /home/openclaw/.openclaw/.env << 'ENVEOF'
 ANTHROPIC_API_KEY=${anthropicApiKey}
 ENVEOF
 
-# Write auth-profiles.json for the main agent
+# Write auth-profiles.json
 cat > /home/openclaw/.openclaw/agents/main/agent/auth-profiles.json << 'AUTHEOF'
 {
   "anthropic:default": {
@@ -278,7 +427,6 @@ cat > /home/openclaw/.cloudflared/credentials.json << 'TUNNELEOF'
 ${tunnelCredentialsJson}
 TUNNELEOF
 
-# Write tunnel config (routes Admin Agent + Gateway)
 cat > /home/openclaw/.cloudflared/config.yml << 'CONFIGYMLEOF'
 tunnel: ${JSON.parse(tunnelCredentialsJson).TunnelID}
 credentials-file: /home/openclaw/.cloudflared/credentials.json
@@ -292,84 +440,47 @@ ingress:
 CONFIGYMLEOF
 ` : ''}
 
-# Create workspace template files
+# Create workspace folders
 mkdir -p /home/openclaw/workspace/memory
 mkdir -p /home/openclaw/workspace/skills/astrid-pm
-
-# Create user-facing folders for Files page
 mkdir -p /home/openclaw/workspace/downloads
 mkdir -p /home/openclaw/workspace/uploads
 mkdir -p /home/openclaw/workspace/projects/archive
-mkdir -p /home/openclaw/workspace/knowledge
 
-# AGENTS.md - Points to the astrid-pm skill
+# ============================================
+# WORKSPACE FILES - Bootstrap Conversation Flow
+# ============================================
+
+# BOOTSTRAP.md - The discovery conversation (agent deletes after completing)
+cat > /home/openclaw/workspace/BOOTSTRAP.md << 'BOOTSTRAPEOF'
+${bootstrapContent}
+BOOTSTRAPEOF
+
+# AGENTS.md - Session behavior
 cat > /home/openclaw/workspace/AGENTS.md << 'AGENTSEOF'
-# Astrid Workspace
-
-You are an AI executive assistant helping a busy professional stay organized.
-
-## Your Role
-
-- Help manage projects, tasks, and ideas
-- Capture thoughts quickly to the inbox
-- Keep track of what's important
-- Be proactive about due dates and priorities
-
-## Workspace Folders
-
-Your workspace is at /home/openclaw/workspace. All paths are relative to this.
-
-**User-visible folders** (shown in the Dashboard Files page):
-- **downloads/** — Files you fetch or create for the user to download
-- **uploads/** — Files the user uploads to share with you
-- **projects/** — Project documentation folders (one folder per project with CONTEXT.md)
-
-When copying files for the user, always put them in the **downloads/** folder.
-When creating project documentation, create **projects/{project-name}/CONTEXT.md**.
-
-## Project Management
-
-You use the **astrid-pm** skill for all project and task management. This skill defines:
-- How to structure PROJECTS.md, TASKS.md, IDEAS.md, and INBOX.md
-- Commands like "new project", "add task", "what's on my plate"
-- File formats that sync with the Astrid dashboard
-
-**Always read the astrid-pm skill when handling project/task requests.**
-
-## Memory
-
-- Write daily notes to memory/YYYY-MM-DD.md
-- Capture important context, decisions, and follow-ups
-- Reference past notes when relevant
-
-## Communication Style
-
-- Be warm and professional
-- Keep responses concise unless detail is requested
-- Confirm actions you've taken
-- Proactively surface upcoming due dates
-
-## Privacy
-
-- Never share the user's data externally
-- Keep workspace contents confidential
+${agentsContent}
 AGENTSEOF
 
-# SOUL.md - Personality (dynamically generated)
-cat > /home/openclaw/workspace/SOUL.md << 'SOULEOF'
-${soulContent}
-SOULEOF
+# MEMORY.md - Long-term memory with PM system reference
+cat > /home/openclaw/workspace/MEMORY.md << 'MEMORYEOF'
+${memoryContent}
+MEMORYEOF
 
-# USER.md - User info
-cat > /home/openclaw/workspace/USER.md << 'USEREOF'
-${userContent}
-USEREOF
+# HEARTBEAT.md
+cat > /home/openclaw/workspace/HEARTBEAT.md << 'HEARTBEATEOF'
+${heartbeatContent}
+HEARTBEATEOF
 
-# Empty starter files for PM system
+# TOOLS.md
+cat > /home/openclaw/workspace/TOOLS.md << 'TOOLSEOF'
+${toolsContent}
+TOOLSEOF
+
+# PM files (empty templates)
 cat > /home/openclaw/workspace/PROJECTS.md << 'EOF'
 # Projects
 
-<!-- Your active projects will appear here. Try saying "new project [name]" to get started! -->
+*No projects yet. Tell me about something you're working on to get started!*
 EOF
 
 cat > /home/openclaw/workspace/TASKS.md << 'EOF'
@@ -377,123 +488,36 @@ cat > /home/openclaw/workspace/TASKS.md << 'EOF'
 
 ## Today
 
-<!-- Tasks for today. Try "add task [something]" to get started! -->
-
 ## This Week
-
-<!-- Tasks for this week -->
 
 ## Later
 
-<!-- Tasks for someday -->
-
 ## Done
-
-<!-- Completed tasks -->
 EOF
 
 cat > /home/openclaw/workspace/IDEAS.md << 'EOF'
 # Ideas
 
-<!-- Your ideas backlog will appear here. Try saying "new idea [title]" to capture something! -->
+*Capture ideas here. Tell me "new idea [title]" to add one!*
 EOF
 
 cat > /home/openclaw/workspace/INBOX.md << 'EOF'
 # Inbox
 
-<!-- Quick captures go here. Try saying "add to inbox [item]" or just "capture [thought]" -->
+*Quick captures go here. Tell me "capture [thought]" to add something!*
 EOF
 
-# Astrid PM Skill - installed by @getastridai/skills package
-# The skill is copied to workspace by the postinstall script
-# We just ensure the directory exists (created above)
-
-# First-contact hook for warm welcome on first message
-mkdir -p /home/openclaw/workspace/hooks/first-contact
-
-cat > /home/openclaw/workspace/hooks/first-contact/HOOK.md << 'HOOKMDEOF'
----
-name: first-contact
-description: "Injects warm welcome instructions for first-time users"
-metadata: { "openclaw": { "emoji": "👋", "events": ["agent:bootstrap"] } }
----
-
-# First Contact Hook
-
-Detects when a user sends their first message and injects welcome instructions
-so the assistant gives a warm, enthusiastic greeting instead of a casual "hey".
-HOOKMDEOF
-
-cat > /home/openclaw/workspace/hooks/first-contact/handler.ts << 'HANDLEREOF'
-const handler = async (event: any) => {
-  if (event.type !== 'agent' || event.action !== 'bootstrap') return;
-
-  const sessionFile = event.context?.sessionFile;
-  let isFirstMessage = false;
-  
-  if (!sessionFile) {
-    isFirstMessage = true;
-  } else {
-    try {
-      const fs = await import('fs');
-      const stats = fs.statSync(sessionFile);
-      isFirstMessage = stats.size < 100;
-    } catch (e) {
-      isFirstMessage = true;
-    }
-  }
-
-  if (!isFirstMessage) return;
-
-  console.log('[first-contact] First message detected! Injecting welcome instructions.');
-
-  const bootstrapFiles = event.context?.bootstrapFiles;
-  if (!bootstrapFiles) return;
-
-  const firstContactInstructions = \`
-## 🚨 FIRST CONTACT ALERT 🚨
-
-THIS IS THE USER'S VERY FIRST MESSAGE TO YOU. They just finished setting you up and are excited to meet you!
-
-**YOUR RESPONSE MUST BE A WARM WELCOME.** Do NOT just say "hey what's up" or give a casual greeting.
-
-Write a 3-4 paragraph welcome that:
-- Greets them with genuine excitement
-- Introduces yourself as their personal executive assistant  
-- Explains you're here to take the mental load off their shoulders
-- Tells them you can DO things, not just plan
-- Asks what they'd like to tackle together
-
-Make it personal and warm. This is a special moment!
-
----
-
-\`;
-
-  for (const file of bootstrapFiles) {
-    if (file.name === 'SOUL.md') {
-      file.content = firstContactInstructions + file.content;
-      break;
-    }
-  }
-};
-
-export default handler;
-HANDLEREOF
+# NOTE: SOUL.md, USER.md, IDENTITY.md are NOT created here
+# The agent creates these during the bootstrap conversation
 
 # Set ownership
 chown -R openclaw:openclaw /home/openclaw
 
-# Install OpenClaw globally
+# Install OpenClaw
 echo "Installing OpenClaw..." >> /var/log/openclaw-init.log
 npm install -g openclaw >> /var/log/openclaw-init.log 2>&1
 
-# ============================================
-# Astrid Agents Setup (via GitHub Packages)
-# ============================================
-echo "Setting up Astrid Agents..." >> /var/log/openclaw-init.log
-
-# Configure npm for GitHub Packages (both root and openclaw users)
+# Configure npm for GitHub Packages
 cat > /home/openclaw/.npmrc << 'NPMRCEOF'
 @getastridai:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=${githubPackagesToken}
@@ -501,17 +525,14 @@ NPMRCEOF
 chown openclaw:openclaw /home/openclaw/.npmrc
 cp /home/openclaw/.npmrc /root/.npmrc
 
-# Install Astrid agents from GitHub Packages
+# Install Astrid agents
 echo "Installing @getastridai/admin-agent..." >> /var/log/openclaw-init.log
 npm install -g @getastridai/admin-agent >> /var/log/openclaw-init.log 2>&1
 
 echo "Installing @getastridai/skills..." >> /var/log/openclaw-init.log
 WORKSPACE_PATH=/home/openclaw/workspace npm install -g @getastridai/skills >> /var/log/openclaw-init.log 2>&1
 
-# Note: @getastridai/control-plane will be installed when ready
-# npm install -g @getastridai/control-plane >> /var/log/openclaw-init.log 2>&1
-
-# Create systemd service for Admin Agent (runs astrid-admin binary)
+# Create systemd services
 cat > /etc/systemd/system/astrid-admin.service << 'ADMINSERVICEEOF'
 [Unit]
 Description=Astrid Admin Agent
@@ -531,8 +552,6 @@ Environment=OPENCLAW_CONFIG=/home/openclaw/.openclaw/openclaw.json
 WantedBy=multi-user.target
 ADMINSERVICEEOF
 
-# Create systemd service for OpenClaw
-# Note: Use "openclaw gateway --port 18789" not "gateway start"
 cat > /etc/systemd/system/openclaw.service << 'SERVICEEOF'
 [Unit]
 Description=OpenClaw AI Assistant Gateway
@@ -553,11 +572,8 @@ Environment=ANTHROPIC_API_KEY=${anthropicApiKey}
 WantedBy=multi-user.target
 SERVICEEOF
 
-# Find cloudflared binary (apt installs to /usr/bin, manual to /usr/local/bin)
 CLOUDFLARED_BIN=$(which cloudflared || echo "/usr/bin/cloudflared")
-echo "cloudflared binary at: $CLOUDFLARED_BIN" >> /var/log/openclaw-init.log
 
-# Create systemd service for cloudflared tunnel
 cat > /etc/systemd/system/cloudflared.service << SERVICEEOF
 [Unit]
 Description=Cloudflare Tunnel for OpenClaw Gateway
@@ -585,11 +601,9 @@ systemctl enable cloudflared >> /var/log/openclaw-init.log 2>&1
 systemctl start openclaw >> /var/log/openclaw-init.log 2>&1
 systemctl start astrid-admin >> /var/log/openclaw-init.log 2>&1
 
-# Wait for services to be ready, then start tunnel
 sleep 10
 systemctl start cloudflared >> /var/log/openclaw-init.log 2>&1
 
-# Signal completion
 echo "OpenClaw provisioning complete at $(date)" >> /var/log/openclaw-init.log
 touch /var/log/openclaw-init-complete
 `;
@@ -606,8 +620,6 @@ export async function createDroplet(options: DropletCreateOptions): Promise<{
 
   const cloudInit = generateCloudInit(options);
 
-  // Build tags for easy identification in DO dashboard
-  // DO tags: lowercase, alphanumeric + hyphens, max 255 chars
   const sanitizeTag = (s: string) => s.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 50);
   const tags = [
     'astrid',
