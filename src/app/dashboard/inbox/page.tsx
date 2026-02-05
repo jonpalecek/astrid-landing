@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useInbox } from '@/hooks/use-workspace';
+import { useInbox, useTasks, useProjects, InboxItem } from '@/hooks/use-workspace';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import { 
   Inbox, 
   Sparkles,
@@ -11,15 +12,19 @@ import {
   RefreshCw,
   Plus,
   Trash2,
-  ArrowRight,
-  CheckSquare
+  CheckSquare,
+  Rocket,
+  Pencil,
+  X,
+  Check
 } from 'lucide-react';
 
 export default function InboxPage() {
-  const { items, isLoading, isError, error, refresh, addItem, deleteItem, processToTask } = useInbox();
+  const { items, isLoading, isError, error, refresh, addItem, updateItem, deleteItem, promoteItem } = useInbox();
+  const { refresh: refreshTasks } = useTasks();
+  const { refresh: refreshProjects } = useProjects();
   const [newItem, setNewItem] = useState('');
   const [isAdding, setIsAdding] = useState(false);
-  const [processingId, setProcessingId] = useState<string | null>(null);
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,25 +38,6 @@ export default function InboxPage() {
       console.error('Failed to add item:', err);
     } finally {
       setIsAdding(false);
-    }
-  };
-
-  const handleDelete = async (itemId: string) => {
-    try {
-      await deleteItem(itemId);
-    } catch (err) {
-      console.error('Failed to delete item:', err);
-    }
-  };
-
-  const handleProcessToTask = async (itemId: string) => {
-    setProcessingId(itemId);
-    try {
-      await processToTask(itemId, 'today');
-    } catch (err) {
-      console.error('Failed to process item:', err);
-    } finally {
-      setProcessingId(null);
     }
   };
 
@@ -131,37 +117,15 @@ export default function InboxPage() {
           </div>
           <ul className="divide-y divide-slate-100">
             {items.map((item) => (
-              <li key={item.id} className="flex items-start gap-3 p-4 group hover:bg-slate-50">
-                <Circle className="w-2 h-2 text-blue-400 mt-2 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-slate-800">{item.content}</p>
-                  {item.source && (
-                    <p className="text-xs text-slate-400 mt-1">from: {item.source}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                  <button
-                    onClick={() => handleProcessToTask(item.id)}
-                    disabled={processingId === item.id}
-                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                    title="Convert to task"
-                  >
-                    {processingId === item.id ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <CheckSquare className="w-3 h-3" />
-                    )}
-                    To Task
-                  </button>
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="p-1 text-slate-300 hover:text-red-500 transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </li>
+              <InboxRow 
+                key={item.id}
+                item={item}
+                onUpdate={updateItem}
+                onDelete={deleteItem}
+                onPromote={promoteItem}
+                onTasksRefresh={refreshTasks}
+                onProjectsRefresh={refreshProjects}
+              />
             ))}
           </ul>
         </div>
@@ -170,9 +134,217 @@ export default function InboxPage() {
       {/* Help text */}
       {items.length > 0 && (
         <p className="text-sm text-slate-500 text-center">
-          💡 Click "To Task" to convert items to tasks, or ask your assistant to help process them.
+          💡 Use the checkbox to convert to task, or rocket to promote to project!
         </p>
       )}
     </div>
+  );
+}
+
+interface InboxRowProps {
+  item: InboxItem;
+  onUpdate: (itemId: string, content: string) => Promise<void>;
+  onDelete: (itemId: string) => Promise<void>;
+  onPromote: (itemId: string, to: 'task' | 'project', section?: string) => Promise<void>;
+  onTasksRefresh: () => void;
+  onProjectsRefresh: () => void;
+}
+
+function InboxRow({ item, onUpdate, onDelete, onPromote, onTasksRefresh, onProjectsRefresh }: InboxRowProps) {
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPromoteTaskConfirm, setShowPromoteTaskConfirm] = useState(false);
+  const [showPromoteProjectConfirm, setShowPromoteProjectConfirm] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isPromoting, setIsPromoting] = useState(false);
+
+  const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsUpdating(true);
+    
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const content = formData.get('content') as string;
+
+    try {
+      await onUpdate(item.id, content);
+      setShowEditModal(false);
+    } catch (err) {
+      console.error('Failed to update item:', err);
+      alert('Failed to update item');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setShowDeleteConfirm(false);
+    try {
+      await onDelete(item.id);
+    } catch (err) {
+      console.error('Failed to delete item:', err);
+    }
+  };
+
+  const handlePromoteToTask = async () => {
+    setShowPromoteTaskConfirm(false);
+    setIsPromoting(true);
+    try {
+      await onPromote(item.id, 'task');
+      onTasksRefresh();
+    } catch (err) {
+      console.error('Failed to promote to task:', err);
+    } finally {
+      setIsPromoting(false);
+    }
+  };
+
+  const handlePromoteToProject = async () => {
+    setShowPromoteProjectConfirm(false);
+    setIsPromoting(true);
+    try {
+      await onPromote(item.id, 'project');
+      onProjectsRefresh();
+    } catch (err) {
+      console.error('Failed to promote to project:', err);
+    } finally {
+      setIsPromoting(false);
+    }
+  };
+
+  return (
+    <>
+      <li className="flex items-start gap-3 p-4 group hover:bg-slate-50">
+        <Circle className="w-2 h-2 text-blue-400 mt-2 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-slate-800">{item.content}</p>
+          {item.addedAt && (
+            <p className="text-xs text-slate-400 mt-1">Added: {item.addedAt}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="p-1 text-slate-300 hover:text-blue-500 transition-colors"
+            title="Edit"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setShowPromoteTaskConfirm(true)}
+            disabled={isPromoting}
+            className="p-1 text-slate-300 hover:text-blue-500 transition-colors"
+            title="Convert to task"
+          >
+            {isPromoting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <CheckSquare className="w-4 h-4" />
+            )}
+          </button>
+          <button
+            onClick={() => setShowPromoteProjectConfirm(true)}
+            disabled={isPromoting}
+            className="p-1 text-slate-300 hover:text-purple-500 transition-colors"
+            title="Promote to project"
+          >
+            <Rocket className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="p-1 text-slate-300 hover:text-red-500 transition-colors"
+            title="Delete"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </li>
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-900">Edit Item</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleEdit} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Content *
+                </label>
+                <textarea
+                  name="content"
+                  required
+                  autoFocus
+                  rows={3}
+                  defaultValue={item.content}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+                >
+                  {isUpdating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="Delete Item"
+        message="Are you sure you want to delete this inbox item? This action cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      {/* Promote to Task Confirmation */}
+      <ConfirmModal
+        isOpen={showPromoteTaskConfirm}
+        title="Convert to Task"
+        message={`Convert this item to a task? It will be added to your Today list and removed from inbox.`}
+        confirmText="Convert"
+        variant="default"
+        onConfirm={handlePromoteToTask}
+        onCancel={() => setShowPromoteTaskConfirm(false)}
+      />
+
+      {/* Promote to Project Confirmation */}
+      <ConfirmModal
+        isOpen={showPromoteProjectConfirm}
+        title="Promote to Project"
+        message="Create a new project from this item? It will be removed from your inbox."
+        confirmText="Promote"
+        variant="promote"
+        onConfirm={handlePromoteToProject}
+        onCancel={() => setShowPromoteProjectConfirm(false)}
+      />
+    </>
   );
 }

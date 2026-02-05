@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useIdeas, Idea } from '@/hooks/use-workspace';
+import { useIdeas, Idea, useTasks, useProjects } from '@/hooks/use-workspace';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import { 
   Lightbulb, 
   Sparkles,
@@ -11,11 +12,17 @@ import {
   RefreshCw,
   Plus,
   Trash2,
-  X
+  X,
+  Pencil,
+  CheckSquare,
+  Rocket,
+  Check
 } from 'lucide-react';
 
 export default function IdeasPage() {
-  const { ideas, isLoading, isError, error, refresh, addIdea, deleteIdea } = useIdeas();
+  const { ideas, isLoading, isError, error, refresh, addIdea, updateIdea, deleteIdea, promoteIdea } = useIdeas();
+  const { refresh: refreshTasks } = useTasks();
+  const { refresh: refreshProjects } = useProjects();
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -28,15 +35,6 @@ export default function IdeasPage() {
   }, {} as Record<string, Idea[]>);
 
   const categoryNames = Object.keys(categories);
-
-  const handleDelete = async (ideaId: string) => {
-    if (!confirm('Delete this idea?')) return;
-    try {
-      await deleteIdea(ideaId);
-    } catch (err) {
-      console.error('Failed to delete idea:', err);
-    }
-  };
 
   const handleAddIdea = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -148,24 +146,15 @@ export default function IdeasPage() {
           
           <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
             {categories[category].map((idea) => (
-              <div key={idea.id} className="p-4 group">
-                <div className="flex items-start gap-3">
-                  <Lightbulb className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-slate-800 font-medium">{idea.title}</p>
-                    {idea.notes && (
-                      <p className="text-sm text-slate-500 mt-1">{idea.notes}</p>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleDelete(idea.id)}
-                    className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                    title="Delete idea"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+              <IdeaRow 
+                key={idea.id}
+                idea={idea}
+                onUpdate={updateIdea}
+                onDelete={deleteIdea}
+                onPromote={promoteIdea}
+                onTasksRefresh={refreshTasks}
+                onProjectsRefresh={refreshProjects}
+              />
             ))}
           </div>
         </div>
@@ -174,7 +163,7 @@ export default function IdeasPage() {
       {/* Help text */}
       {ideas.length > 0 && (
         <p className="text-sm text-slate-500 text-center">
-          💡 Ask your assistant to help you develop these ideas into projects!
+          💡 Use the rocket to promote ideas to projects, or checkbox to make them tasks!
         </p>
       )}
 
@@ -209,18 +198,13 @@ export default function IdeasPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Category
                 </label>
-                <select
+                <input
+                  type="text"
                   name="category"
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                >
-                  {categoryNames.length > 0 ? (
-                    categoryNames.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))
-                  ) : (
-                    <option value="Uncategorized">Uncategorized</option>
-                  )}
-                </select>
+                  placeholder="e.g., Product, Marketing"
+                  defaultValue="Uncategorized"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -259,5 +243,216 @@ export default function IdeasPage() {
         </div>
       )}
     </div>
+  );
+}
+
+interface IdeaRowProps {
+  idea: Idea;
+  onUpdate: (ideaId: string, updates: { title?: string; content?: string; tags?: string[] }) => Promise<void>;
+  onDelete: (ideaId: string) => Promise<void>;
+  onPromote: (ideaId: string, to: 'task' | 'project', section?: string) => Promise<void>;
+  onTasksRefresh: () => void;
+  onProjectsRefresh: () => void;
+}
+
+function IdeaRow({ idea, onUpdate, onDelete, onPromote, onTasksRefresh, onProjectsRefresh }: IdeaRowProps) {
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPromoteTaskConfirm, setShowPromoteTaskConfirm] = useState(false);
+  const [showPromoteProjectConfirm, setShowPromoteProjectConfirm] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsUpdating(true);
+    
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const title = formData.get('title') as string;
+    const content = formData.get('content') as string;
+
+    try {
+      await onUpdate(idea.id, { title, content });
+      setShowEditModal(false);
+    } catch (err) {
+      console.error('Failed to update idea:', err);
+      alert('Failed to update idea');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setShowDeleteConfirm(false);
+    try {
+      await onDelete(idea.id);
+    } catch (err) {
+      console.error('Failed to delete idea:', err);
+    }
+  };
+
+  const handlePromoteToTask = async () => {
+    setShowPromoteTaskConfirm(false);
+    try {
+      await onPromote(idea.id, 'task');
+      onTasksRefresh();
+    } catch (err) {
+      console.error('Failed to promote to task:', err);
+    }
+  };
+
+  const handlePromoteToProject = async () => {
+    setShowPromoteProjectConfirm(false);
+    try {
+      await onPromote(idea.id, 'project');
+      onProjectsRefresh();
+    } catch (err) {
+      console.error('Failed to promote to project:', err);
+    }
+  };
+
+  return (
+    <>
+      <div className="p-4 group">
+        <div className="flex items-start gap-3">
+          <Lightbulb className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-slate-800 font-medium">{idea.title}</p>
+            {idea.notes && (
+              <p className="text-sm text-slate-500 mt-1">{idea.notes}</p>
+            )}
+          </div>
+          
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="p-1 text-slate-300 hover:text-amber-500 opacity-0 group-hover:opacity-100 transition-all"
+            title="Edit idea"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+          
+          <button
+            onClick={() => setShowPromoteTaskConfirm(true)}
+            className="p-1 text-slate-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-all"
+            title="Convert to task"
+          >
+            <CheckSquare className="w-4 h-4" />
+          </button>
+          
+          <button
+            onClick={() => setShowPromoteProjectConfirm(true)}
+            className="p-1 text-slate-300 hover:text-purple-500 opacity-0 group-hover:opacity-100 transition-all"
+            title="Promote to project"
+          >
+            <Rocket className="w-4 h-4" />
+          </button>
+          
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+            title="Delete idea"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-900">Edit Idea</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleEdit} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Title *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  required
+                  autoFocus
+                  defaultValue={idea.title}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  name="content"
+                  rows={4}
+                  defaultValue={idea.notes || ''}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50"
+                >
+                  {isUpdating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="Delete Idea"
+        message={`Are you sure you want to delete "${idea.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      {/* Promote to Task Confirmation */}
+      <ConfirmModal
+        isOpen={showPromoteTaskConfirm}
+        title="Convert to Task"
+        message={`Convert "${idea.title}" to a task? The idea will be removed from your ideas list.`}
+        confirmText="Convert"
+        variant="default"
+        onConfirm={handlePromoteToTask}
+        onCancel={() => setShowPromoteTaskConfirm(false)}
+      />
+
+      {/* Promote to Project Confirmation */}
+      <ConfirmModal
+        isOpen={showPromoteProjectConfirm}
+        title="Promote to Project"
+        message={`Create a new project from "${idea.title}"? The idea will be removed from your ideas list.`}
+        confirmText="Promote"
+        variant="promote"
+        onConfirm={handlePromoteToProject}
+        onCancel={() => setShowPromoteProjectConfirm(false)}
+      />
+    </>
   );
 }

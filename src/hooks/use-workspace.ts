@@ -374,6 +374,7 @@ export interface Idea {
   title: string;
   category?: string;
   notes?: string;
+  tags?: string[];
 }
 
 export interface IdeasResponse {
@@ -403,6 +404,28 @@ export function useIdeas() {
     );
   };
 
+  // Update an idea
+  const updateIdea = async (ideaId: string, updates: { title?: string; content?: string; tags?: string[] }) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      ideas: data.ideas.map(i => i.id === ideaId ? { ...i, ...updates, notes: updates.content } : i)
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/ideas/${ideaId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        });
+        if (!res.ok) throw new Error('Failed to update idea');
+        return fetcher('/api/vm/ideas');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
   // Delete an idea
   const deleteIdea = async (ideaId: string) => {
     // Optimistic update
@@ -423,6 +446,28 @@ export function useIdeas() {
     );
   };
 
+  // Promote idea to task or project
+  const promoteIdea = async (ideaId: string, to: 'task' | 'project', section?: string) => {
+    // Optimistic: remove from ideas
+    const optimisticData = data ? {
+      ...data,
+      ideas: data.ideas.filter(i => i.id !== ideaId)
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/ideas/${ideaId}/promote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to, section }),
+        });
+        if (!res.ok) throw new Error('Failed to promote idea');
+        return fetcher('/api/vm/ideas');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
   return {
     ideas: data?.ideas || [],
     isLoading,
@@ -430,7 +475,9 @@ export function useIdeas() {
     error: error?.message,
     refresh: mutate,
     addIdea,
+    updateIdea,
     deleteIdea,
+    promoteIdea,
   };
 }
 
@@ -469,6 +516,28 @@ export function useInbox() {
     );
   };
 
+  // Update an inbox item
+  const updateItem = async (itemId: string, content: string) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      items: data.items.map(i => i.id === itemId ? { ...i, content } : i)
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/inbox/${itemId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        });
+        if (!res.ok) throw new Error('Failed to update item');
+        return fetcher('/api/vm/inbox');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
   // Delete an inbox item
   const deleteItem = async (itemId: string) => {
     // Optimistic update
@@ -489,20 +558,31 @@ export function useInbox() {
     );
   };
 
-  // Process inbox item to task
-  const processToTask = async (itemId: string, section: string = 'today') => {
+  // Promote inbox item to task or project
+  const promoteItem = async (itemId: string, to: 'task' | 'project', section?: string) => {
+    // Optimistic: remove from inbox
+    const optimisticData = data ? {
+      ...data,
+      items: data.items.filter(i => i.id !== itemId)
+    } : undefined;
+
     await mutate(
       async () => {
-        const res = await fetch(`/api/vm/inbox/${itemId}/process`, {
+        const res = await fetch(`/api/vm/inbox/${itemId}/promote`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'to-task', section }),
+          body: JSON.stringify({ to, section }),
         });
-        if (!res.ok) throw new Error('Failed to process item');
+        if (!res.ok) throw new Error('Failed to promote item');
         return fetcher('/api/vm/inbox');
       },
-      { revalidate: true }
+      { optimisticData, rollbackOnError: true }
     );
+  };
+
+  // Process inbox item to task (legacy, use promoteItem instead)
+  const processToTask = async (itemId: string, section: string = 'today') => {
+    return promoteItem(itemId, 'task', section);
   };
 
   return {
@@ -512,7 +592,9 @@ export function useInbox() {
     error: error?.message,
     refresh: mutate,
     addItem,
+    updateItem,
     deleteItem,
+    promoteItem,
     processToTask,
   };
 }
