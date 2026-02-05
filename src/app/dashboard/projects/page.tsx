@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useProjects, Project } from '@/hooks/use-workspace';
+import { useProjects, Project, ProjectTask } from '@/hooks/use-workspace';
 import { 
   Rocket, 
   Target, 
@@ -14,11 +14,25 @@ import {
   Plus,
   Trash2,
   X,
-  ChevronDown
+  ChevronDown,
+  Pencil
 } from 'lucide-react';
 
 export default function ProjectsPage() {
-  const { projects, isLoading, isError, error, refresh, addProject, updateStatus, deleteProject } = useProjects();
+  const { 
+    projects, 
+    isLoading, 
+    isError, 
+    error, 
+    refresh, 
+    addProject, 
+    updateProject,
+    updateStatus, 
+    deleteProject,
+    addProjectTask,
+    toggleProjectTask,
+    deleteProjectTask
+  } = useProjects();
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -135,6 +149,10 @@ export default function ProjectsPage() {
           projects={activeProjects}
           onStatusChange={handleStatusChange}
           onDelete={handleDelete}
+          onUpdateProject={updateProject}
+          onToggleTask={toggleProjectTask}
+          onAddTask={addProjectTask}
+          onDeleteTask={deleteProjectTask}
         />
       )}
 
@@ -146,6 +164,10 @@ export default function ProjectsPage() {
           projects={pausedProjects}
           onStatusChange={handleStatusChange}
           onDelete={handleDelete}
+          onUpdateProject={updateProject}
+          onToggleTask={toggleProjectTask}
+          onAddTask={addProjectTask}
+          onDeleteTask={deleteProjectTask}
         />
       )}
 
@@ -157,6 +179,10 @@ export default function ProjectsPage() {
           projects={completedProjects}
           onStatusChange={handleStatusChange}
           onDelete={handleDelete}
+          onUpdateProject={updateProject}
+          onToggleTask={toggleProjectTask}
+          onAddTask={addProjectTask}
+          onDeleteTask={deleteProjectTask}
         />
       )}
 
@@ -233,9 +259,13 @@ interface ProjectSectionProps {
   projects: Project[];
   onStatusChange: (projectId: string, status: string) => void;
   onDelete: (projectId: string, projectName: string) => void;
+  onUpdateProject: (projectId: string, updates: { name?: string; description?: string }) => Promise<void>;
+  onToggleTask: (projectId: string, taskId: string, done: boolean) => Promise<void>;
+  onAddTask: (projectId: string, task: { title: string; due?: string; priority?: string }) => Promise<void>;
+  onDeleteTask: (projectId: string, taskId: string) => Promise<void>;
 }
 
-function ProjectSection({ title, icon, projects, onStatusChange, onDelete }: ProjectSectionProps) {
+function ProjectSection({ title, icon, projects, onStatusChange, onDelete, onUpdateProject, onToggleTask, onAddTask, onDeleteTask }: ProjectSectionProps) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3 text-sm font-medium text-slate-600">
@@ -250,6 +280,10 @@ function ProjectSection({ title, icon, projects, onStatusChange, onDelete }: Pro
             project={project}
             onStatusChange={onStatusChange}
             onDelete={onDelete}
+            onUpdateProject={onUpdateProject}
+            onToggleTask={onToggleTask}
+            onAddTask={onAddTask}
+            onDeleteTask={onDeleteTask}
           />
         ))}
       </div>
@@ -261,10 +295,17 @@ interface ProjectCardProps {
   project: Project;
   onStatusChange: (projectId: string, status: string) => void;
   onDelete: (projectId: string, projectName: string) => void;
+  onUpdateProject: (projectId: string, updates: { name?: string; description?: string }) => Promise<void>;
+  onToggleTask: (projectId: string, taskId: string, done: boolean) => Promise<void>;
+  onAddTask: (projectId: string, task: { title: string; due?: string; priority?: string }) => Promise<void>;
+  onDeleteTask: (projectId: string, taskId: string) => Promise<void>;
 }
 
-function ProjectCard({ project, onStatusChange, onDelete }: ProjectCardProps) {
+function ProjectCard({ project, onStatusChange, onDelete, onUpdateProject, onToggleTask, onAddTask, onDeleteTask }: ProjectCardProps) {
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   
   const totalTasks = project.tasks.length;
   const doneTasks = project.tasks.filter(t => t.done).length;
@@ -278,6 +319,62 @@ function ProjectCard({ project, onStatusChange, onDelete }: ProjectCardProps) {
 
   const currentStatus = statusOptions.find(s => s.value === project.status) || statusOptions[0];
 
+  const handleToggleTask = async (task: ProjectTask) => {
+    try {
+      await onToggleTask(project.id, task.id, !task.done);
+    } catch (err) {
+      console.error('Failed to toggle task:', err);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await onDeleteTask(project.id, taskId);
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+    }
+  };
+
+  const handleEditProject = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsUpdating(true);
+    
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const name = formData.get('name') as string;
+    const description = formData.get('description') as string;
+
+    try {
+      await onUpdateProject(project.id, { name, description });
+      setShowEditModal(false);
+    } catch (err) {
+      console.error('Failed to update project:', err);
+      alert('Failed to update project');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleAddTask = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsUpdating(true);
+    
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const title = formData.get('title') as string;
+
+    try {
+      await onAddTask(project.id, { title });
+      setShowAddTaskModal(false);
+      form.reset();
+    } catch (err) {
+      console.error('Failed to add task:', err);
+      alert('Failed to add task');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <div className="p-4 group">
       <div className="flex items-start justify-between mb-3">
@@ -288,6 +385,15 @@ function ProjectCard({ project, onStatusChange, onDelete }: ProjectCardProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Edit Button */}
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="p-1 text-slate-300 hover:text-purple-500 opacity-0 group-hover:opacity-100 transition-all"
+            title="Edit project"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+
           {/* Status Dropdown */}
           <div className="relative">
             <button
@@ -354,16 +460,19 @@ function ProjectCard({ project, onStatusChange, onDelete }: ProjectCardProps) {
 
       {/* Tasks list */}
       {project.tasks.length > 0 && (
-        <ul className="space-y-2">
+        <ul className="space-y-2 mb-3">
           {project.tasks.map((task) => (
-            <li key={task.id} className="flex items-center gap-2 text-sm">
-              <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                task.done 
-                  ? 'bg-green-100 border-green-300 text-green-600' 
-                  : 'border-slate-300'
-              }`}>
+            <li key={task.id} className="flex items-center gap-2 text-sm group/task">
+              <button
+                onClick={() => handleToggleTask(task)}
+                className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                  task.done 
+                    ? 'bg-green-100 border-green-300 text-green-600 hover:bg-green-200' 
+                    : 'border-slate-300 hover:border-purple-400 hover:bg-purple-50'
+                }`}
+              >
                 {task.done && <Check className="w-2.5 h-2.5" />}
-              </span>
+              </button>
               <span className={`flex-1 ${task.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
                 {task.title}
               </span>
@@ -382,9 +491,142 @@ function ProjectCard({ project, onStatusChange, onDelete }: ProjectCardProps) {
                   {task.priority}
                 </span>
               )}
+              <button
+                onClick={() => handleDeleteTask(task.id)}
+                className="p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover/task:opacity-100 transition-all"
+                title="Delete task"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Add Task Button */}
+      <button
+        onClick={() => setShowAddTaskModal(true)}
+        className="flex items-center gap-1 text-xs text-slate-400 hover:text-purple-500 transition-colors"
+      >
+        <Plus className="w-3 h-3" />
+        Add task
+      </button>
+
+      {/* Edit Project Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-900">Edit Project</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleEditProject} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Project name *
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  autoFocus
+                  defaultValue={project.name}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  rows={3}
+                  defaultValue={project.description || ''}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50"
+                >
+                  {isUpdating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Task Modal */}
+      {showAddTaskModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-900">Add Task to {project.name}</h2>
+              <button
+                onClick={() => setShowAddTaskModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddTask} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Task title *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  required
+                  autoFocus
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="What needs to be done?"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddTaskModal(false)}
+                  className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50"
+                >
+                  {isUpdating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  Add Task
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

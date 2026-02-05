@@ -168,12 +168,12 @@ export function useProjects() {
     );
   };
 
-  // Update project status
-  const updateStatus = async (projectId: string, status: string) => {
+  // Update project (name, description, and/or status)
+  const updateProject = async (projectId: string, updates: { name?: string; description?: string; status?: string }) => {
     // Optimistic update
     const optimisticData = data ? {
       ...data,
-      projects: data.projects.map(p => p.id === projectId ? { ...p, status } : p)
+      projects: data.projects.map(p => p.id === projectId ? { ...p, ...updates } : p)
     } : undefined;
 
     await mutate(
@@ -181,13 +181,18 @@ export function useProjects() {
         const res = await fetch(`/api/vm/projects/${projectId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status }),
+          body: JSON.stringify(updates),
         });
         if (!res.ok) throw new Error('Failed to update project');
         return fetcher('/api/vm/projects');
       },
       { optimisticData, rollbackOnError: true }
     );
+  };
+
+  // Update project status (convenience wrapper)
+  const updateStatus = async (projectId: string, status: string) => {
+    return updateProject(projectId, { status });
   };
 
   // Delete a project
@@ -210,6 +215,98 @@ export function useProjects() {
     );
   };
 
+  // Add a task to a project
+  const addProjectTask = async (projectId: string, task: { title: string; due?: string; priority?: string }) => {
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/projects/${projectId}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(task),
+        });
+        if (!res.ok) throw new Error('Failed to add task');
+        return fetcher('/api/vm/projects');
+      },
+      { revalidate: true }
+    );
+  };
+
+  // Toggle a project task's done status
+  const toggleProjectTask = async (projectId: string, taskId: string, done: boolean) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      projects: data.projects.map(p => 
+        p.id === projectId 
+          ? { ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, done } : t) }
+          : p
+      )
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/projects/${projectId}/tasks/${taskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ done }),
+        });
+        if (!res.ok) throw new Error('Failed to update task');
+        return fetcher('/api/vm/projects');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
+  // Update a project task
+  const updateProjectTask = async (projectId: string, taskId: string, updates: { title?: string; done?: boolean; due?: string; priority?: string }) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      projects: data.projects.map(p => 
+        p.id === projectId 
+          ? { ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t) }
+          : p
+      )
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/projects/${projectId}/tasks/${taskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        });
+        if (!res.ok) throw new Error('Failed to update task');
+        return fetcher('/api/vm/projects');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
+  // Delete a task from a project
+  const deleteProjectTask = async (projectId: string, taskId: string) => {
+    // Optimistic update
+    const optimisticData = data ? {
+      ...data,
+      projects: data.projects.map(p => 
+        p.id === projectId 
+          ? { ...p, tasks: p.tasks.filter(t => t.id !== taskId) }
+          : p
+      )
+    } : undefined;
+
+    await mutate(
+      async () => {
+        const res = await fetch(`/api/vm/projects/${projectId}/tasks/${taskId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete task');
+        return fetcher('/api/vm/projects');
+      },
+      { optimisticData, rollbackOnError: true }
+    );
+  };
+
   return {
     projects: data?.projects || [],
     isLoading,
@@ -217,8 +314,13 @@ export function useProjects() {
     error: error?.message,
     refresh: mutate,
     addProject,
+    updateProject,
     updateStatus,
     deleteProject,
+    addProjectTask,
+    toggleProjectTask,
+    updateProjectTask,
+    deleteProjectTask,
   };
 }
 
