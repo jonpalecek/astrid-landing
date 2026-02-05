@@ -300,6 +300,7 @@ mkdir -p /home/openclaw/workspace/skills/astrid-pm
 mkdir -p /home/openclaw/workspace/downloads
 mkdir -p /home/openclaw/workspace/uploads
 mkdir -p /home/openclaw/workspace/projects/archive
+mkdir -p /home/openclaw/workspace/knowledge
 
 # AGENTS.md - Points to the astrid-pm skill
 cat > /home/openclaw/workspace/AGENTS.md << 'AGENTSEOF'

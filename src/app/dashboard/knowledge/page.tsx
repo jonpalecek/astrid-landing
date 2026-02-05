@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 // Knowledge Base root
-const KNOWLEDGE_ROOT = '~/user/knowledge';
+const KNOWLEDGE_ROOT = '~/knowledge';
 
 export default function KnowledgeBasePage() {
   const [currentPath, setCurrentPath] = useState(KNOWLEDGE_ROOT);
