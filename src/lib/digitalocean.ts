@@ -507,8 +507,33 @@ cat > /home/openclaw/workspace/INBOX.md << 'EOF'
 *Quick captures go here. Tell me "capture [thought]" to add something!*
 EOF
 
-# NOTE: SOUL.md, USER.md, IDENTITY.md are NOT created here
-# The agent creates these during the bootstrap conversation
+# PLACEHOLDER FILES - Prevent OpenClaw from seeding defaults
+# These exist so OpenClaw doesn't auto-create them with generic content
+# The agent will overwrite these during the bootstrap conversation
+
+cat > /home/openclaw/workspace/SOUL.md << 'EOF'
+# SOUL.md
+
+*Not configured yet.*
+
+**Follow BOOTSTRAP.md to discover who you are.**
+EOF
+
+cat > /home/openclaw/workspace/USER.md << 'EOF'
+# USER.md
+
+*Not configured yet.*
+
+**Follow BOOTSTRAP.md to learn about your human.**
+EOF
+
+cat > /home/openclaw/workspace/IDENTITY.md << 'EOF'
+# IDENTITY.md
+
+*Not configured yet.*
+
+**Follow BOOTSTRAP.md to establish your identity.**
+EOF
 
 # Set ownership
 chown -R openclaw:openclaw /home/openclaw
