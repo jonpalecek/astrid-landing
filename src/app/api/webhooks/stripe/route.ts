@@ -100,11 +100,11 @@ async function handleSubscriptionUpdate(
 ) {
   const customerId = subscription.customer as string;
   
-  // Type assertion for period fields (exist at runtime but not in newer type definitions)
-  const sub = subscription as Stripe.Subscription & {
-    current_period_start: number;
-    current_period_end: number;
-  };
+  // Safely extract period fields (may be nested or missing in newer API versions)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sub = subscription as any;
+  const periodEnd = sub.current_period_end || sub.items?.data?.[0]?.current_period_end;
+  const periodStart = sub.current_period_start || sub.items?.data?.[0]?.current_period_start;
 
   // Find user by stripe_customer_id
   const { data: profile, error } = await supabase
@@ -121,13 +121,18 @@ async function handleSubscriptionUpdate(
   const status = mapStripeStatus(subscription.status);
 
   // Update profile
+  const profileUpdate: Record<string, unknown> = {
+    subscription_status: status,
+    subscription_id: subscription.id,
+  };
+  
+  if (periodEnd) {
+    profileUpdate.subscription_ends_at = new Date(periodEnd * 1000).toISOString();
+  }
+
   const { error: updateError } = await supabase
     .from('profiles')
-    .update({
-      subscription_status: status,
-      subscription_id: subscription.id,
-      subscription_ends_at: new Date(sub.current_period_end * 1000).toISOString(),
-    })
+    .update(profileUpdate)
     .eq('id', profile.id);
 
   if (updateError) {
@@ -136,20 +141,27 @@ async function handleSubscriptionUpdate(
   }
 
   // Upsert subscription record for history
+  const subscriptionRecord: Record<string, unknown> = {
+    user_id: profile.id,
+    stripe_subscription_id: subscription.id,
+    stripe_customer_id: customerId,
+    status: subscription.status,
+    price_id: subscription.items.data[0]?.price.id,
+    canceled_at: subscription.canceled_at
+      ? new Date(subscription.canceled_at * 1000).toISOString()
+      : null,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (periodStart) {
+    subscriptionRecord.current_period_start = new Date(periodStart * 1000).toISOString();
+  }
+  if (periodEnd) {
+    subscriptionRecord.current_period_end = new Date(periodEnd * 1000).toISOString();
+  }
+
   await supabase.from('subscriptions').upsert(
-    {
-      user_id: profile.id,
-      stripe_subscription_id: subscription.id,
-      stripe_customer_id: customerId,
-      status: subscription.status,
-      price_id: subscription.items.data[0]?.price.id,
-      current_period_start: new Date(sub.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
-      canceled_at: subscription.canceled_at
-        ? new Date(subscription.canceled_at * 1000).toISOString()
-        : null,
-      updated_at: new Date().toISOString(),
-    },
+    subscriptionRecord,
     { onConflict: 'stripe_subscription_id' }
   );
 
