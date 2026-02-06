@@ -540,7 +540,7 @@ chown -R openclaw:openclaw /home/openclaw
 
 # Install OpenClaw
 echo "Installing OpenClaw..." >> /var/log/openclaw-init.log
-npm install -g openclaw >> /var/log/openclaw-init.log 2>&1
+npm install -g openclaw@2026.2.2 >> /var/log/openclaw-init.log 2>&1  # Pinned: 2026.2.3+ has skill discovery bug
 
 # Configure npm for GitHub Packages
 cat > /home/openclaw/.npmrc << 'NPMRCEOF'
