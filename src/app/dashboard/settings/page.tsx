@@ -38,10 +38,19 @@ interface Instance {
   provisioned_at: string;
 }
 
+interface Profile {
+  id: string;
+  subscription_status: string | null;
+  subscription_id: string | null;
+  subscription_ends_at: string | null;
+  stripe_customer_id: string | null;
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('account');
   const [user, setUser] = useState<User | null>(null);
   const [instance, setInstance] = useState<Instance | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
@@ -51,13 +60,21 @@ export default function SettingsPage() {
       setUser(user);
 
       if (user) {
-        const { data: instanceData } = await supabase
-          .from('instances')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
+        const [instanceResult, profileResult] = await Promise.all([
+          supabase
+            .from('instances')
+            .select('*')
+            .eq('user_id', user.id)
+            .single(),
+          supabase
+            .from('profiles')
+            .select('id, subscription_status, subscription_id, subscription_ends_at, stripe_customer_id')
+            .eq('id', user.id)
+            .single()
+        ]);
         
-        setInstance(instanceData);
+        setInstance(instanceResult.data);
+        setProfile(profileResult.data);
       }
       
       setLoading(false);
@@ -118,7 +135,7 @@ export default function SettingsPage() {
           {activeTab === 'channels' && <ChannelsSettings instance={instance} />}
           {activeTab === 'ai' && <AISettings instance={instance} />}
           {activeTab === 'notifications' && <NotificationsSettings />}
-          {activeTab === 'billing' && <BillingSettings />}
+          {activeTab === 'billing' && <BillingSettings profile={profile} />}
         </div>
       </div>
     </div>
@@ -804,22 +821,89 @@ function NotificationsSettings() {
   );
 }
 
-function BillingSettings() {
+function BillingSettings({ profile }: { profile: Profile | null }) {
+  const [loading, setLoading] = useState(false);
+
+  const isSubscribed = profile?.subscription_status === 'active';
+  const isPastDue = profile?.subscription_status === 'past_due';
+
+  async function handleSubscribe() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/checkout', { method: 'POST' });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || 'Failed to start checkout');
+      }
+    } catch (err) {
+      alert('Failed to start checkout');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleManageBilling() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/billing/portal', { method: 'POST' });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || 'Failed to open billing portal');
+      }
+    } catch (err) {
+      alert('Failed to open billing portal');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Current Plan</h2>
         
-        <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg">
-          <div>
-            <p className="font-semibold text-slate-900">Free Trial</p>
-            <p className="text-sm text-slate-600">7 days remaining</p>
+        {isSubscribed ? (
+          <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div>
+              <p className="font-semibold text-slate-900">Astrid Pro</p>
+              <p className="text-sm text-green-600 flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4" /> Active subscription
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold text-slate-900">$99</p>
+              <p className="text-sm text-slate-500">per month</p>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-slate-900">$0</p>
-            <p className="text-sm text-slate-500">then $49/mo</p>
+        ) : isPastDue ? (
+          <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div>
+              <p className="font-semibold text-slate-900">Astrid Pro</p>
+              <p className="text-sm text-red-600 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" /> Payment past due
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold text-slate-900">$99</p>
+              <p className="text-sm text-slate-500">per month</p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div>
+              <p className="font-semibold text-slate-900">No Active Plan</p>
+              <p className="text-sm text-slate-600">Subscribe to get started</p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold text-slate-900">$99</p>
+              <p className="text-sm text-slate-500">per month</p>
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 p-4 border border-slate-200 rounded-lg">
           <h3 className="font-medium text-slate-900 mb-2">What's included:</h3>
@@ -833,20 +917,38 @@ function BillingSettings() {
           </ul>
         </div>
 
-        <button className="mt-4 w-full px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors">
-          Add Payment Method
-        </button>
+        {isSubscribed || isPastDue ? (
+          <button 
+            onClick={handleManageBilling}
+            disabled={loading}
+            className="mt-4 w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Loading...' : 'Manage Subscription'}
+          </button>
+        ) : (
+          <button 
+            onClick={handleSubscribe}
+            disabled={loading}
+            className="mt-4 w-full px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Loading...' : 'Subscribe — $99/month'}
+          </button>
+        )}
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Payment Method</h2>
-        <p className="text-slate-500">No payment method on file.</p>
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Billing History</h2>
-        <p className="text-slate-500">No invoices yet.</p>
-      </div>
+      {(isSubscribed || isPastDue) && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">Subscription Details</h2>
+          <div className="text-sm text-slate-600 space-y-1">
+            {profile?.subscription_ends_at && (
+              <p>Current period ends: {new Date(profile.subscription_ends_at).toLocaleDateString()}</p>
+            )}
+            <p className="text-slate-500">
+              Manage your payment method, view invoices, or cancel in the billing portal.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
