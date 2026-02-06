@@ -4,17 +4,18 @@ import Stripe from 'stripe';
 // Throws at runtime if STRIPE_SECRET_KEY is not set
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-// Helper to check if user has active subscription
+// Helper to check if user has active subscription (including trial)
 export function isSubscribed(subscriptionStatus: string | null): boolean {
-  return subscriptionStatus === 'active';
+  return subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
 }
 
 // Map Stripe subscription status to our simplified status
 export function mapStripeStatus(stripeStatus: Stripe.Subscription.Status): string {
   switch (stripeStatus) {
     case 'active':
-    case 'trialing':
       return 'active';
+    case 'trialing':
+      return 'trialing';
     case 'past_due':
       return 'past_due';
     case 'canceled':

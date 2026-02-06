@@ -824,7 +824,9 @@ function NotificationsSettings() {
 function BillingSettings({ profile }: { profile: Profile | null }) {
   const [loading, setLoading] = useState(false);
 
-  const isSubscribed = profile?.subscription_status === 'active';
+  const isTrialing = profile?.subscription_status === 'trialing';
+  const isActive = profile?.subscription_status === 'active';
+  const isSubscribed = isTrialing || isActive;
   const isPastDue = profile?.subscription_status === 'past_due';
 
   async function handleSubscribe() {
@@ -866,7 +868,20 @@ function BillingSettings({ profile }: { profile: Profile | null }) {
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Current Plan</h2>
         
-        {isSubscribed ? (
+        {isTrialing ? (
+          <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div>
+              <p className="font-semibold text-slate-900">Astrid Pro — Free Trial</p>
+              <p className="text-sm text-blue-600 flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4" /> Trial active
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold text-slate-900">$0</p>
+              <p className="text-sm text-slate-500">then $99/mo</p>
+            </div>
+          </div>
+        ) : isActive ? (
           <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
             <div>
               <p className="font-semibold text-slate-900">Astrid Pro</p>
@@ -931,7 +946,7 @@ function BillingSettings({ profile }: { profile: Profile | null }) {
             disabled={loading}
             className="mt-4 w-full px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50"
           >
-            {loading ? 'Loading...' : 'Subscribe — $99/month'}
+            {loading ? 'Loading...' : 'Start Free Trial'}
           </button>
         )}
       </div>
@@ -941,10 +956,16 @@ function BillingSettings({ profile }: { profile: Profile | null }) {
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Subscription Details</h2>
           <div className="text-sm text-slate-600 space-y-1">
             {profile?.subscription_ends_at && (
-              <p>Current period ends: {new Date(profile.subscription_ends_at).toLocaleDateString()}</p>
+              <p>
+                {isTrialing ? 'Trial ends: ' : 'Current period ends: '}
+                {new Date(profile.subscription_ends_at).toLocaleDateString()}
+              </p>
             )}
             <p className="text-slate-500">
-              Manage your payment method, view invoices, or cancel in the billing portal.
+              {isTrialing 
+                ? 'Your card will be charged $99/month when your trial ends. Cancel anytime in the billing portal.'
+                : 'Manage your payment method, view invoices, or cancel in the billing portal.'
+              }
             </p>
           </div>
         </div>

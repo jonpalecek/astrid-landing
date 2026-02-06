@@ -47,7 +47,7 @@ export async function POST() {
         .eq('id', user.id);
     }
 
-    // Create checkout session
+    // Create checkout session with 7-day free trial
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
@@ -58,6 +58,9 @@ export async function POST() {
           quantity: 1,
         },
       ],
+      subscription_data: {
+        trial_period_days: 7,
+      },
       success_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://getastrid.ai'}/dashboard?upgraded=true`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://getastrid.ai'}/pricing`,
       metadata: {
